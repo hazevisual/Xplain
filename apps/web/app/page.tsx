@@ -198,6 +198,7 @@ export default function HomePage() {
     data: true,
     actor: true,
   });
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
   const insights = useMemo(() => buildInsights(result?.graph ?? null), [result?.graph]);
@@ -212,6 +213,21 @@ export default function HomePage() {
       coverageDelta: Math.round((left.coverage_percent - right.coverage_percent) * 100) / 100,
     };
   }, [revisions, compareLeftVersion, compareRightVersion]);
+  const selectedNodeDetails = useMemo(() => {
+    if (!result || !selectedNodeId) return null;
+    const node = result.graph.nodes.find((item) => item.id === selectedNodeId);
+    if (!node) return null;
+    const nodeById = new Map(result.graph.nodes.map((item) => [item.id, item]));
+    const linkedEdges = result.graph.edges.filter((edge) => edge.from === selectedNodeId || edge.to === selectedNodeId);
+    return {
+      node,
+      linkedEdges: linkedEdges.map((edge) => ({
+        ...edge,
+        fromTitle: nodeById.get(edge.from)?.title ?? edge.from,
+        toTitle: nodeById.get(edge.to)?.title ?? edge.to,
+      })),
+    };
+  }, [result, selectedNodeId]);
 
   function toggleTypeFilter(nodeType: GraphNode["type"]): void {
     setTypeFilter((prev) => ({ ...prev, [nodeType]: !prev[nodeType] }));
@@ -266,6 +282,7 @@ export default function HomePage() {
     const details = (await res.json()) as ProcessDetails;
     setResult(details);
     setInputText(details.description ?? details.title);
+    setSelectedNodeId(null);
     await loadRevisions(id);
   }
 
@@ -301,6 +318,7 @@ export default function HomePage() {
       if (!genRes.ok) throw new Error("Failed to generate visual explanation.");
       const generated = (await genRes.json()) as ProcessDetails;
       setResult(generated);
+      setSelectedNodeId(null);
       await loadHistory();
       await loadRevisions(generated.id);
     } catch (e) {
@@ -328,6 +346,7 @@ export default function HomePage() {
               setRevisions([]);
               setCompareLeftVersion(null);
               setCompareRightVersion(null);
+              setSelectedNodeId(null);
             }}
           >
             + New XPlain
@@ -413,11 +432,19 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="graphPanel">
-                  <ReactFlow nodes={flow.nodes} edges={flow.edges} fitView nodesDraggable={false} nodesConnectable={false}>
+                  <ReactFlow
+                    nodes={flow.nodes}
+                    edges={flow.edges}
+                    fitView
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                  >
                     <Background color="#262626" />
                     <Controls />
                   </ReactFlow>
                 </div>
+                <p className="graphHint">Click any node to inspect its details and connections.</p>
                 <div className="qualityGrid">
                   <article className="qualityItem">
                     <span>Coverage</span>
@@ -439,6 +466,25 @@ export default function HomePage() {
                       {result.graph.warnings.map((warning, idx) => (
                         <li key={`${warning}-${idx}`}>{warning}</li>
                       ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {selectedNodeDetails ? (
+                  <div className="nodeDetailCard">
+                    <h3>Node Detail</h3>
+                    <p className="nodeMeta">
+                      {selectedNodeDetails.node.title} | {selectedNodeDetails.node.type} | {selectedNodeDetails.node.level}
+                    </p>
+                    <ul>
+                      {selectedNodeDetails.linkedEdges.length > 0 ? (
+                        selectedNodeDetails.linkedEdges.map((edge) => (
+                          <li key={edge.id}>
+                            {edge.fromTitle} {"->"} {edge.toTitle} ({edge.kind})
+                          </li>
+                        ))
+                      ) : (
+                        <li>No connected edges.</li>
+                      )}
                     </ul>
                   </div>
                 ) : null}

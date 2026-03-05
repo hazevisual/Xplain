@@ -280,6 +280,12 @@ textarea {
   background: #090909;
 }
 
+.graphHint {
+  margin: 0.6rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
 .graphFilters {
   margin-bottom: var(--space-md);
   display: grid;
@@ -451,6 +457,28 @@ textarea {
 }
 
 .warningBlock ul {
+  margin: 0;
+}
+
+.nodeDetailCard {
+  margin-top: var(--space-md);
+  border: 1px solid #313131;
+  border-radius: 10px;
+  background: #101010;
+  padding: 0.72rem 0.82rem;
+}
+
+.nodeDetailCard h3 {
+  margin: 0 0 0.42rem;
+}
+
+.nodeMeta {
+  margin: 0 0 0.55rem;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.nodeDetailCard ul {
   margin: 0;
 }
 
