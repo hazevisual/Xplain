@@ -6,7 +6,6 @@ This document defines the standard task card and state log format for the agent 
 
 - Ensure every task is traceable end-to-end.
 - Standardize lead assignment, execution order, risks, and closure criteria.
-- Enforce mandatory gates (`QA`, `Documentation`) where required.
 - Enforce mandatory gates (`Planning`, `QA`, `Documentation`) where required.
 
 ## Mandatory Gates
@@ -83,3 +82,9 @@ This document defines the standard task card and state log format for the agent 
 - If `Planning required: yes`, moving to `in_progress` without `Planning status: approved` is not allowed.
 - Closure without `QA status: passed` is not allowed.
 - If behavior/contracts changed, closure without docs update is not allowed.
+
+## Runtime Check Rules
+
+- Use `scripts/wait-url.ps1` for service readiness checks.
+- Default timeout for readiness probes is `20s`.
+- Avoid manual polling loops with `1s` sleep unless explicitly needed for diagnostics.

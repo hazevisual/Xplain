@@ -1,9 +1,6 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: xplain-postgres
     environment:
       POSTGRES_DB: xplain
       POSTGRES_USER: xplain
@@ -12,12 +9,50 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xplain -d xplain"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   redis:
     image: redis:7-alpine
-    container_name: xplain-redis
     ports:
       - "6379:6379"
+
+  api:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./apps/api:/app
+    environment:
+      XPLAIN_STORAGE: postgres
+      DATABASE_URL: postgresql+psycopg://xplain:xplain@postgres:5432/xplain
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -lc "pip install -r requirements.txt &&
+      alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+
+  web:
+    image: node:22-alpine
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      - api
+    command: >
+      sh -lc "npm install &&
+      npm run dev --workspace @xplain/web -- -H 0.0.0.0 -p 3000"
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres_data:

@@ -21,12 +21,14 @@ Establish project documentation and an execution plan to start implementation wi
 
 ## Bootstrap Status
 
-Phase 0 scaffold is initialized:
+Phase 0 and initial Phase 1 backend persistence are initialized:
 
 - `apps/web` - Next.js frontend baseline.
-- `apps/api` - FastAPI backend baseline.
+- `apps/api` - FastAPI backend with process CRUD, PostgreSQL storage, and graph generation endpoint.
 - `packages/shared` - shared JSON schema contracts.
 - `docs/tasks/TASK-20260306-001.md` - first task card and state log.
+- `docs/tasks/TASK-20260306-002.md` - phase 1 minimal CRUD task.
+- `docs/tasks/TASK-20260306-005.md` - visual explanation MVP (`text -> graph`) task.
 
 ## Repository Structure
 
@@ -51,6 +53,17 @@ XPlain/
 2. Backend (`apps/api`):
    - Create virtual environment
    - Install `requirements.txt`
+   - Set `XPLAIN_STORAGE=postgres` and `DATABASE_URL=postgresql+psycopg://xplain:xplain@localhost:5432/xplain`
+   - Run migrations: `alembic upgrade head`
    - Run `uvicorn app.main:app --reload --port 8000`
-3. Infra services (optional):
+3. Full stack via Docker Compose (recommended):
    - `docker compose up -d`
+
+## Fast Readiness Check
+
+Use the fast probe script instead of long manual loops:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/wait-url.ps1 -Url http://localhost:8000/health
+powershell -ExecutionPolicy Bypass -File scripts/wait-url.ps1 -Url http://localhost:3000
+```

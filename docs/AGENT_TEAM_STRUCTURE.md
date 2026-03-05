@@ -52,6 +52,7 @@ Specialist invocation triggers:
 - Scope: UI, interactive visualization, client performance, accessibility.
 - Input: interface and UX tasks.
 - Output: UI changes, acceptance criteria, risks.
+- Mandatory rule: all primary vertical UI blocks must share one max-width and alignment policy; third-party controls must be themed and cannot keep default white styles on dark UI.
 
 ### `Backend Agent`
 
