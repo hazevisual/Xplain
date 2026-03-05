@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from .schemas import EdgeKind, NodeLevel, NodeType, ProcessEdge, ProcessGraph, ProcessNode
+from .schemas import EdgeKind, GraphQuality, NodeLevel, NodeType, ProcessEdge, ProcessGraph, ProcessNode
 
 STEP_SPLIT_RE = re.compile(r"(?:\r?\n|->|=>|→|;|\.)")
 NUMBER_PREFIX_RE = re.compile(r"^\s*\d+[\)\.\-:]\s*")
@@ -13,10 +13,11 @@ ACTOR_HINTS = {
     "manager": "Manager",
     "operator": "Operator",
     "doctor": "Doctor",
-    "пациент": "Пациент",
-    "врач": "Врач",
     "пользователь": "Пользователь",
+    "клиент": "Клиент",
     "менеджер": "Менеджер",
+    "оператор": "Оператор",
+    "врач": "Врач",
 }
 
 DATA_HINTS = {
@@ -42,9 +43,9 @@ COMPONENT_HINTS = {
     "integration": "Integration Layer",
     "ml": "ML Module",
     "ai": "AI Module",
-    "модуль": "Модуль",
     "сервис": "Сервис",
-    "интеграц": "Интеграция",
+    "модуль": "Модуль",
+    "интеграци": "Интеграция",
 }
 
 
@@ -52,7 +53,18 @@ def _truncate(text: str, limit: int = 80) -> str:
     value = re.sub(r"\s+", " ", text).strip()
     if len(value) <= limit:
         return value
-    return f"{value[: limit - 1].rstrip()}…"
+    return f"{value[: limit - 3].rstrip()}..."
+
+
+def _extract_source_segments(text: str) -> list[str]:
+    chunks = STEP_SPLIT_RE.split(text.strip())
+    segments: list[str] = []
+    for chunk in chunks:
+        cleaned = NUMBER_PREFIX_RE.sub("", chunk).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        if len(cleaned) >= 3:
+            segments.append(cleaned)
+    return segments
 
 
 def _extract_steps(text: str) -> list[str]:
@@ -60,17 +72,10 @@ def _extract_steps(text: str) -> list[str]:
     if not source:
         return []
 
-    chunks = STEP_SPLIT_RE.split(source)
-    steps: list[str] = []
-    for chunk in chunks:
-        step = NUMBER_PREFIX_RE.sub("", chunk).strip()
-        step = re.sub(r"\s+", " ", step)
-        if len(step) >= 3:
-            steps.append(_truncate(step, 72))
-
+    segments = _extract_source_segments(source)
+    steps = [_truncate(segment, 72) for segment in segments]
     if not steps:
         steps = [_truncate(source, 72)]
-
     return steps[:8]
 
 
@@ -94,6 +99,31 @@ def _extract_hints(step_text: str) -> list[tuple[NodeType, str]]:
             break
 
     return result
+
+
+def _compute_quality(source_text: str, nodes: list[ProcessNode], edges: list[ProcessEdge]) -> GraphQuality:
+    segments = _extract_source_segments(source_text)
+    l2_nodes = [node for node in nodes if node.level == NodeLevel.l2]
+    segment_count = max(len(segments), 1)
+    coverage_percent = min(100.0, round((len(l2_nodes) / segment_count) * 100, 2))
+
+    connected_node_ids: set[str] = set()
+    for edge in edges:
+        connected_node_ids.add(edge.from_node)
+        connected_node_ids.add(edge.to)
+    dangling_nodes = sorted([node.id for node in nodes if node.id not in connected_node_ids])
+
+    normalized_titles = [re.sub(r"\s+", " ", node.title.strip().lower()) for node in nodes if node.title.strip()]
+    duplicates = len(normalized_titles) - len(set(normalized_titles))
+    naming_consistency_percent = 0.0
+    if normalized_titles:
+        naming_consistency_percent = round(max(0.0, 100.0 - (duplicates / len(normalized_titles) * 100.0)), 2)
+
+    return GraphQuality(
+        coverage_percent=coverage_percent,
+        dangling_nodes=dangling_nodes,
+        naming_consistency_percent=naming_consistency_percent,
+    )
 
 
 def generate_process_graph(process_id: str, title: str, source_text: str, version: int) -> ProcessGraph:
@@ -193,11 +223,21 @@ def generate_process_graph(process_id: str, title: str, source_text: str, versio
             )
         )
 
+    quality = _compute_quality(source_text=source_text, nodes=nodes, edges=edges)
+    if quality.coverage_percent < 65:
+        warnings.append("Coverage is low: extracted steps cover less than 65% of source segments.")
+    if quality.dangling_nodes:
+        warnings.append("Graph contains dangling nodes without connections.")
+    if quality.naming_consistency_percent < 70:
+        warnings.append("Naming consistency is low: too many duplicate or unstable node titles.")
+
     return ProcessGraph(
         processId=process_id,
         version=max(version, 1),
         nodes=nodes,
         edges=edges,
         warnings=warnings,
-        sourceRefs=["generated:rule-based:v1"],
+        sourceRefs=["generated:rule-based:v2"],
+        quality=quality,
     )
+

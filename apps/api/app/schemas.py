@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class NodeType(str, Enum):
@@ -46,6 +46,12 @@ class ProcessEdge(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class GraphQuality(BaseModel):
+    coverage_percent: float = Field(default=0.0, ge=0, le=100)
+    dangling_nodes: list[str] = Field(default_factory=list)
+    naming_consistency_percent: float = Field(default=0.0, ge=0, le=100)
+
+
 class ProcessGraph(BaseModel):
     process_id: str = Field(alias="processId", min_length=1)
     version: int = Field(ge=1)
@@ -53,24 +59,75 @@ class ProcessGraph(BaseModel):
     edges: list[ProcessEdge] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     source_refs: list[str] = Field(alias="sourceRefs", default_factory=list)
+    quality: GraphQuality = Field(default_factory=GraphQuality)
 
     model_config = {"populate_by_name": True}
 
 
 class ProcessCreateRequest(BaseModel):
-    title: str = Field(min_length=1)
-    description: str | None = None
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=20_000)
     graph: ProcessGraph | None = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        title = value.strip()
+        if not title:
+            raise ValueError("Title must not be empty")
+        return title
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return value
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class ProcessUpdateRequest(BaseModel):
-    title: str | None = Field(default=None, min_length=1)
-    description: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=20_000)
     graph: ProcessGraph | None = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        title = value.strip()
+        if not title:
+            raise ValueError("Title must not be empty")
+        return title
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return value
+        return value.strip()
 
 
 class GenerateGraphRequest(BaseModel):
-    text: str | None = None
+    text: str | None = Field(default=None, max_length=20_000)
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return value
+        return value.strip()
+
+
+class ErrorPayload(BaseModel):
+    code: str = Field(min_length=1)
+    message: str = Field(min_length=1)
+    details: Any | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorPayload
 
 
 class ProcessSummary(BaseModel):

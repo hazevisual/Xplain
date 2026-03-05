@@ -29,6 +29,26 @@ alembic upgrade head
 alembic current
 ```
 
+## Tests
+
+```bash
+pytest tests -q
+```
+
+## Error Contract
+
+All API errors return a stable envelope:
+
+```json
+{
+  "error": {
+    "code": "validation_error|process_not_found|source_text_empty|...",
+    "message": "Human-readable message",
+    "details": {}
+  }
+}
+```
+
 ## Planned Scope
 
 - Process/version CRUD.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -10,6 +10,10 @@ from .db import Base
 
 class ProcessRecord(Base):
     __tablename__ = "processes"
+    __table_args__ = (
+        Index("ix_processes_updated_at", "updated_at"),
+        Index("ix_processes_created_at", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -22,4 +26,3 @@ class ProcessRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-
