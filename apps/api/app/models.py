@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -24,5 +24,27 @@ class ProcessRecord(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class ProcessRevisionRecord(Base):
+    __tablename__ = "process_revisions"
+    __table_args__ = (
+        UniqueConstraint("process_id", "version", name="uq_process_revisions_process_version"),
+        Index("ix_process_revisions_process_id", "process_id"),
+        Index("ix_process_revisions_process_version", "process_id", "version"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    process_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("processes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    graph: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

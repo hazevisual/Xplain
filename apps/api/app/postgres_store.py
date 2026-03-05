@@ -6,8 +6,15 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import ProcessRecord
-from .schemas import ProcessCreateRequest, ProcessDetails, ProcessGraph, ProcessSummary, ProcessUpdateRequest
+from .models import ProcessRecord, ProcessRevisionRecord
+from .schemas import (
+    ProcessCreateRequest,
+    ProcessDetails,
+    ProcessGraph,
+    ProcessRevisionSummary,
+    ProcessSummary,
+    ProcessUpdateRequest,
+)
 
 
 class PostgresProcessStore:
@@ -36,6 +43,50 @@ class PostgresProcessStore:
             version=record.version,
             graph=graph,
         )
+
+    @staticmethod
+    def _to_revision_summary(record: ProcessRevisionRecord) -> ProcessRevisionSummary:
+        graph = ProcessGraph.model_validate(record.graph)
+        return ProcessRevisionSummary(
+            version=record.version,
+            created_at=record.created_at,
+            nodes_count=len(graph.nodes),
+            edges_count=len(graph.edges),
+            warnings_count=len(graph.warnings),
+            coverage_percent=graph.quality.coverage_percent,
+        )
+
+    @staticmethod
+    def _upsert_revision(
+        session: Session,
+        *,
+        process_id: str,
+        version: int,
+        description: str | None,
+        graph: ProcessGraph,
+        created_at: datetime,
+    ) -> None:
+        revision = session.scalar(
+            select(ProcessRevisionRecord).where(
+                ProcessRevisionRecord.process_id == process_id,
+                ProcessRevisionRecord.version == version,
+            )
+        )
+        if revision is None:
+            revision = ProcessRevisionRecord(
+                process_id=process_id,
+                version=version,
+                description=description,
+                graph=graph.model_dump(by_alias=True),
+                created_at=created_at,
+            )
+            session.add(revision)
+            return
+
+        revision.description = description
+        revision.graph = graph.model_dump(by_alias=True)
+        revision.created_at = created_at
+        session.add(revision)
 
     def list(self) -> list[ProcessSummary]:
         with self._session_factory() as session:
@@ -75,6 +126,14 @@ class PostgresProcessStore:
 
         with self._session_factory() as session:
             session.add(row)
+            self._upsert_revision(
+                session,
+                process_id=process_id,
+                version=graph.version,
+                description=payload.description,
+                graph=graph,
+                created_at=now,
+            )
             session.commit()
             session.refresh(row)
             return self._to_details(row)
@@ -96,6 +155,14 @@ class PostgresProcessStore:
             row.version = updated_graph.version
             row.updated_at = datetime.now(UTC)
 
+            self._upsert_revision(
+                session,
+                process_id=process_id,
+                version=row.version,
+                description=row.description,
+                graph=updated_graph,
+                created_at=row.updated_at,
+            )
             session.add(row)
             session.commit()
             session.refresh(row)
@@ -109,4 +176,31 @@ class PostgresProcessStore:
             session.delete(row)
             session.commit()
             return True
+
+    def list_revisions(self, process_id: str) -> list[ProcessRevisionSummary]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(ProcessRevisionRecord)
+                .where(ProcessRevisionRecord.process_id == process_id)
+                .order_by(ProcessRevisionRecord.version.desc())
+            ).all()
+
+            if rows:
+                return [self._to_revision_summary(row) for row in rows]
+
+            # Backward compatibility for processes created before revision table existed.
+            current = session.get(ProcessRecord, process_id)
+            if not current:
+                return []
+            fallback_graph = ProcessGraph.model_validate(current.graph)
+            return [
+                ProcessRevisionSummary(
+                    version=current.version,
+                    created_at=current.updated_at,
+                    nodes_count=len(fallback_graph.nodes),
+                    edges_count=len(fallback_graph.edges),
+                    warnings_count=len(fallback_graph.warnings),
+                    coverage_percent=fallback_graph.quality.coverage_percent,
+                )
+            ]
 

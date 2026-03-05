@@ -379,6 +379,65 @@ textarea {
   margin: 0;
 }
 
+.revisionCard {
+  margin-bottom: var(--space-md);
+  border: 1px solid #2f2f2f;
+  border-radius: 10px;
+  background: #101010;
+  padding: 0.72rem 0.82rem;
+}
+
+.revisionCard h3 {
+  margin: 0 0 0.5rem;
+}
+
+.revisionSelectors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.62rem;
+  margin-bottom: 0.62rem;
+}
+
+.revisionSelectors label {
+  display: grid;
+  gap: 0.32rem;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.revisionSelectors select {
+  border: 1px solid #363636;
+  border-radius: 8px;
+  background: #131313;
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+}
+
+.revisionDeltaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.55rem;
+}
+
+.revisionDelta {
+  border: 1px solid #2b2b2b;
+  border-radius: 8px;
+  background: #121212;
+  padding: 0.45rem 0.55rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.revisionDelta span {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+}
+
+.revisionDelta strong {
+  font-size: 0.95rem;
+}
+
 .warningBlock {
   margin-top: var(--space-md);
   border: 1px solid #3a3a3a;

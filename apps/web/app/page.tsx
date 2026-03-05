@@ -26,6 +26,15 @@ type ProcessSummary = {
   version: number;
 };
 
+type ProcessRevisionSummary = {
+  version: number;
+  created_at: string;
+  nodes_count: number;
+  edges_count: number;
+  warnings_count: number;
+  coverage_percent: number;
+};
+
 type GraphQuality = {
   coverage_percent: number;
   dangling_nodes: string[];
@@ -178,6 +187,9 @@ export default function HomePage() {
   const [executing, setExecuting] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [revisions, setRevisions] = useState<ProcessRevisionSummary[]>([]);
+  const [compareLeftVersion, setCompareLeftVersion] = useState<number | null>(null);
+  const [compareRightVersion, setCompareRightVersion] = useState<number | null>(null);
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("ALL");
   const [typeFilter, setTypeFilter] = useState<Record<GraphNode["type"], boolean>>({
     stage: true,
@@ -189,9 +201,46 @@ export default function HomePage() {
 
   const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
   const insights = useMemo(() => buildInsights(result?.graph ?? null), [result?.graph]);
+  const compareStats = useMemo(() => {
+    const left = revisions.find((item) => item.version === compareLeftVersion);
+    const right = revisions.find((item) => item.version === compareRightVersion);
+    if (!left || !right) return null;
+    return {
+      nodesDelta: left.nodes_count - right.nodes_count,
+      edgesDelta: left.edges_count - right.edges_count,
+      warningsDelta: left.warnings_count - right.warnings_count,
+      coverageDelta: Math.round((left.coverage_percent - right.coverage_percent) * 100) / 100,
+    };
+  }, [revisions, compareLeftVersion, compareRightVersion]);
 
   function toggleTypeFilter(nodeType: GraphNode["type"]): void {
     setTypeFilter((prev) => ({ ...prev, [nodeType]: !prev[nodeType] }));
+  }
+
+  function initializeCompareVersions(nextRevisions: ProcessRevisionSummary[]): void {
+    if (nextRevisions.length === 0) {
+      setCompareLeftVersion(null);
+      setCompareRightVersion(null);
+      return;
+    }
+
+    const left = nextRevisions[0].version;
+    const right = nextRevisions[1]?.version ?? left;
+    setCompareLeftVersion(left);
+    setCompareRightVersion(right);
+  }
+
+  async function loadRevisions(processId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/v1/processes/${processId}/revisions`, { cache: "no-store" });
+    if (!res.ok) {
+      setRevisions([]);
+      setCompareLeftVersion(null);
+      setCompareRightVersion(null);
+      return;
+    }
+    const data = (await res.json()) as ProcessRevisionSummary[];
+    setRevisions(data);
+    initializeCompareVersions(data);
   }
 
   async function loadHistory(): Promise<void> {
@@ -217,6 +266,7 @@ export default function HomePage() {
     const details = (await res.json()) as ProcessDetails;
     setResult(details);
     setInputText(details.description ?? details.title);
+    await loadRevisions(id);
   }
 
   async function onExecute(): Promise<void> {
@@ -252,6 +302,7 @@ export default function HomePage() {
       const generated = (await genRes.json()) as ProcessDetails;
       setResult(generated);
       await loadHistory();
+      await loadRevisions(generated.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
@@ -274,6 +325,9 @@ export default function HomePage() {
               setResult(null);
               setInputText("");
               setError(null);
+              setRevisions([]);
+              setCompareLeftVersion(null);
+              setCompareRightVersion(null);
             }}
           >
             + New XPlain
@@ -419,6 +473,61 @@ export default function HomePage() {
                       <li>No bottlenecks detected yet.</li>
                     )}
                   </ul>
+                </div>
+                <div className="revisionCard">
+                  <h3>Version Compare</h3>
+                  <div className="revisionSelectors">
+                    <label>
+                      Left
+                      <select
+                        value={compareLeftVersion ?? ""}
+                        onChange={(e) => setCompareLeftVersion(Number(e.target.value))}
+                        disabled={revisions.length === 0}
+                      >
+                        {revisions.map((item) => (
+                          <option key={`left-${item.version}`} value={item.version}>
+                            v{item.version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Right
+                      <select
+                        value={compareRightVersion ?? ""}
+                        onChange={(e) => setCompareRightVersion(Number(e.target.value))}
+                        disabled={revisions.length === 0}
+                      >
+                        {revisions.map((item) => (
+                          <option key={`right-${item.version}`} value={item.version}>
+                            v{item.version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {compareStats ? (
+                    <div className="revisionDeltaGrid">
+                      <article className="revisionDelta">
+                        <span>Nodes Delta</span>
+                        <strong>{compareStats.nodesDelta >= 0 ? `+${compareStats.nodesDelta}` : compareStats.nodesDelta}</strong>
+                      </article>
+                      <article className="revisionDelta">
+                        <span>Edges Delta</span>
+                        <strong>{compareStats.edgesDelta >= 0 ? `+${compareStats.edgesDelta}` : compareStats.edgesDelta}</strong>
+                      </article>
+                      <article className="revisionDelta">
+                        <span>Warnings Delta</span>
+                        <strong>{compareStats.warningsDelta >= 0 ? `+${compareStats.warningsDelta}` : compareStats.warningsDelta}</strong>
+                      </article>
+                      <article className="revisionDelta">
+                        <span>Coverage Delta</span>
+                        <strong>{compareStats.coverageDelta >= 0 ? `+${compareStats.coverageDelta}` : compareStats.coverageDelta}%</strong>
+                      </article>
+                    </div>
+                  ) : (
+                    <p className="sideMeta">No revision data yet.</p>
+                  )}
                 </div>
                 <p className="desc">{result.description ?? "No description provided"}</p>
                 <div className="columns">

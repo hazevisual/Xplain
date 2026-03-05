@@ -138,6 +138,15 @@ class ProcessSummary(BaseModel):
     version: int
 
 
+class ProcessRevisionSummary(BaseModel):
+    version: int
+    created_at: datetime
+    nodes_count: int
+    edges_count: int
+    warnings_count: int
+    coverage_percent: float = Field(ge=0, le=100)
+
+
 class ProcessDetails(ProcessSummary):
     created_at: datetime
     graph: ProcessGraph

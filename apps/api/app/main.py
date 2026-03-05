@@ -14,6 +14,7 @@ from .schemas import (
     GenerateGraphRequest,
     ProcessCreateRequest,
     ProcessDetails,
+    ProcessRevisionSummary,
     ProcessSummary,
     ProcessUpdateRequest,
 )
@@ -105,9 +106,9 @@ def health() -> dict[str, str]:
 def meta() -> dict[str, str]:
     return {
         "service": "xplain-api",
-        "stage": "phase-1-hardening",
+        "stage": "phase-2-versioning",
         "storage": storage_backend,
-        "message": "Process CRUD API with validation and stable error contract is ready",
+        "message": "Process CRUD API with validation, quality metrics, and revision tracking is ready",
     }
 
 
@@ -132,6 +133,14 @@ def get_process(process_id: str) -> ProcessDetails:
     if process is None:
         raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
     return process
+
+
+@app.get("/api/v1/processes/{process_id}/revisions", response_model=list[ProcessRevisionSummary], responses=API_ERROR_RESPONSES)
+def list_process_revisions(process_id: str) -> list[ProcessRevisionSummary]:
+    process = store.get(process_id)
+    if process is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    return store.list_revisions(process_id)
 
 
 @app.put("/api/v1/processes/{process_id}", response_model=ProcessDetails, responses=API_ERROR_RESPONSES)

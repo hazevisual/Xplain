@@ -5,7 +5,7 @@ from threading import Lock
 from typing import Protocol
 from uuid import uuid4
 
-from .schemas import ProcessCreateRequest, ProcessDetails, ProcessGraph, ProcessSummary, ProcessUpdateRequest
+from .schemas import ProcessCreateRequest, ProcessDetails, ProcessGraph, ProcessRevisionSummary, ProcessSummary, ProcessUpdateRequest
 
 
 class ProcessStore(Protocol):
@@ -24,11 +24,26 @@ class ProcessStore(Protocol):
     def delete(self, process_id: str) -> bool:
         ...
 
+    def list_revisions(self, process_id: str) -> list[ProcessRevisionSummary]:
+        ...
+
 
 class InMemoryProcessStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._data: dict[str, ProcessDetails] = {}
+        self._revisions: dict[str, dict[int, ProcessDetails]] = {}
+
+    @staticmethod
+    def _to_revision_summary(item: ProcessDetails) -> ProcessRevisionSummary:
+        return ProcessRevisionSummary(
+            version=item.version,
+            created_at=item.updated_at,
+            nodes_count=len(item.graph.nodes),
+            edges_count=len(item.graph.edges),
+            warnings_count=len(item.graph.warnings),
+            coverage_percent=item.graph.quality.coverage_percent,
+        )
 
     def list(self) -> list[ProcessSummary]:
         with self._lock:
@@ -75,6 +90,7 @@ class InMemoryProcessStore:
 
         with self._lock:
             self._data[process_id] = item
+            self._revisions[process_id] = {item.version: item.model_copy(deep=True)}
 
         return item.model_copy(deep=True)
 
@@ -99,6 +115,9 @@ class InMemoryProcessStore:
                 deep=True,
             )
             self._data[process_id] = updated
+            if process_id not in self._revisions:
+                self._revisions[process_id] = {}
+            self._revisions[process_id][updated.version] = updated.model_copy(deep=True)
             return updated.model_copy(deep=True)
 
     def delete(self, process_id: str) -> bool:
@@ -106,4 +125,12 @@ class InMemoryProcessStore:
             if process_id not in self._data:
                 return False
             del self._data[process_id]
+            if process_id in self._revisions:
+                del self._revisions[process_id]
             return True
+
+    def list_revisions(self, process_id: str) -> list[ProcessRevisionSummary]:
+        with self._lock:
+            versions = self._revisions.get(process_id, {})
+            snapshots = [versions[v] for v in sorted(versions.keys(), reverse=True)]
+            return [self._to_revision_summary(item) for item in snapshots]

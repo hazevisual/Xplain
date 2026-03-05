@@ -68,3 +68,10 @@ def test_generate_graph_success_increments_version() -> None:
     assert payload["graph"]["quality"]["coverage_percent"] >= 0
     assert payload["graph"]["quality"]["naming_consistency_percent"] >= 0
     assert isinstance(payload["graph"]["quality"]["dangling_nodes"], list)
+
+    revisions = client.get(f"/api/v1/processes/{initial['id']}/revisions")
+    assert revisions.status_code == 200
+    revisions_payload = revisions.json()
+    assert len(revisions_payload) >= 2
+    assert revisions_payload[0]["version"] == initial["version"] + 1
+    assert revisions_payload[1]["version"] == initial["version"]
