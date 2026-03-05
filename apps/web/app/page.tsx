@@ -45,6 +45,13 @@ type ProcessDetails = ProcessSummary & {
   };
 };
 
+type GraphInsights = {
+  criticalDependencies: number;
+  actorCount: number;
+  dataCount: number;
+  topBottlenecks: Array<{ nodeId: string; title: string; score: number }>;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const LEVEL_FILTERS = ["ALL", "L1", "L2", "L3"] as const;
 type LevelFilter = (typeof LEVEL_FILTERS)[number];
@@ -56,6 +63,46 @@ const NODE_TYPE_LABELS: Record<GraphNode["type"], string> = {
   data: "Data",
   actor: "Actor",
 };
+
+function buildInsights(graph: ProcessDetails["graph"] | null): GraphInsights {
+  if (!graph) {
+    return { criticalDependencies: 0, actorCount: 0, dataCount: 0, topBottlenecks: [] };
+  }
+
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const traffic = new Map<string, number>();
+  graph.nodes.forEach((node) => traffic.set(node.id, 0));
+
+  graph.edges.forEach((edge) => {
+    traffic.set(edge.from, (traffic.get(edge.from) ?? 0) + 1);
+    traffic.set(edge.to, (traffic.get(edge.to) ?? 0) + 1);
+  });
+
+  const topBottlenecks = graph.nodes
+    .filter((node) => node.level === "L2")
+    .map((node) => ({
+      nodeId: node.id,
+      title: node.title,
+      score: traffic.get(node.id) ?? 0,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+
+  const criticalDependencies = graph.edges.filter((edge) => edge.kind === "depends_on").length;
+  const actorCount = graph.nodes.filter((node) => node.type === "actor").length;
+  const dataCount = graph.nodes.filter((node) => node.type === "data").length;
+
+  return {
+    criticalDependencies,
+    actorCount,
+    dataCount,
+    topBottlenecks: topBottlenecks.map((item) => ({
+      nodeId: item.nodeId,
+      title: nodeById.get(item.nodeId)?.title ?? item.title,
+      score: item.score,
+    })),
+  };
+}
 
 function toFlow(
   graph: ProcessDetails["graph"] | null,
@@ -141,6 +188,7 @@ export default function HomePage() {
   });
 
   const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
+  const insights = useMemo(() => buildInsights(result?.graph ?? null), [result?.graph]);
 
   function toggleTypeFilter(nodeType: GraphNode["type"]): void {
     setTypeFilter((prev) => ({ ...prev, [nodeType]: !prev[nodeType] }));
@@ -344,6 +392,34 @@ export default function HomePage() {
 
               <section className="resultCard">
                 <h2>Description & Links</h2>
+                <div className="insightGrid">
+                  <article className="insightCard">
+                    <span>Critical Dependencies</span>
+                    <strong>{insights.criticalDependencies}</strong>
+                  </article>
+                  <article className="insightCard">
+                    <span>Actors</span>
+                    <strong>{insights.actorCount}</strong>
+                  </article>
+                  <article className="insightCard">
+                    <span>Data Nodes</span>
+                    <strong>{insights.dataCount}</strong>
+                  </article>
+                </div>
+                <div className="bottleneckCard">
+                  <h3>Top Bottlenecks</h3>
+                  <ul>
+                    {insights.topBottlenecks.length > 0 ? (
+                      insights.topBottlenecks.map((item) => (
+                        <li key={item.nodeId}>
+                          {item.title} ({item.score})
+                        </li>
+                      ))
+                    ) : (
+                      <li>No bottlenecks detected yet.</li>
+                    )}
+                  </ul>
+                </div>
                 <p className="desc">{result.description ?? "No description provided"}</p>
                 <div className="columns">
                   <div>
