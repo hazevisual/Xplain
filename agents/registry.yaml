@@ -1,0 +1,200 @@
+version: 1
+project: XPlain
+lead_agent: lead
+
+policies:
+  mandatory_gates:
+    before_close: [qa]
+    on_behavior_or_contract_change: [documentation]
+    before_execution_if_complex: [planning]
+  complexity_detection:
+    require_planning_if_any:
+      - affects_3_or_more_branches
+      - estimated_subtasks_5_or_more
+      - has_external_dependency
+      - high_risk_change
+  task_log:
+    format: markdown
+    location: docs/TASK_RUNBOOK.md
+
+agents:
+  - id: lead
+    name: Lead Agent
+    role: orchestrator
+    responsibilities:
+      - Decompose incoming tasks and assign specialists
+      - Manage dependencies across frontend/backend/database/devops
+      - Aggregate outputs and provide final status
+      - Escalate blockers and conflicts
+    can_call:
+      - planning
+      - frontend
+      - backend
+      - database
+      - devops
+      - qa
+      - security
+      - ai_pipeline
+      - documentation
+    output_contract:
+      status: [done, blocked, needs_review]
+      required_fields:
+        - execution_plan
+        - summary
+        - affected_branches
+        - risks
+        - next_actions
+
+  - id: planning
+    name: Planning Agent
+    role: specialist
+    branch: planning
+    responsibilities:
+      - Break complex tasks into executable subtasks
+      - Define execution order and branch dependencies
+      - Propose risk mitigations and fallback options
+    handoff_to:
+      - lead
+      - frontend
+      - backend
+      - database
+      - devops
+      - security
+      - ai_pipeline
+      - documentation
+
+  - id: frontend
+    name: Frontend Agent
+    role: specialist
+    branch: frontend
+    responsibilities:
+      - Build and maintain UI and process visualization
+      - Keep accessibility and client performance requirements
+      - Align with API contracts and shared schema
+    handoff_to:
+      - qa
+      - documentation
+
+  - id: backend
+    name: Backend Agent
+    role: specialist
+    branch: backend
+    responsibilities:
+      - Implement API and domain logic
+      - Integrate AI orchestration and async jobs
+      - Maintain compatibility with frontend and database contracts
+    handoff_to:
+      - qa
+      - documentation
+
+  - id: database
+    name: Database Agent
+    role: specialist
+    branch: database
+    responsibilities:
+      - Design schema and indexes
+      - Prepare migrations and rollback plan
+      - Ensure data integrity and performance
+    handoff_to:
+      - backend
+      - qa
+      - documentation
+
+  - id: devops
+    name: DevOps Agent
+    role: specialist
+    branch: devops
+    responsibilities:
+      - Configure CI/CD and environments
+      - Containerization and deployment pipelines
+      - Monitoring, alerts, and operational runbooks
+    handoff_to:
+      - qa
+      - security
+      - documentation
+
+  - id: qa
+    name: QA Agent
+    role: specialist
+    branch: quality
+    responsibilities:
+      - Validate acceptance criteria
+      - Run regression/e2e checks
+      - Report quality verdict and release risks
+    handoff_to:
+      - lead
+
+  - id: security
+    name: Security Agent
+    role: specialist
+    branch: security
+    responsibilities:
+      - Check RBAC, secrets, and dependency vulnerabilities
+      - Validate audit and data protection requirements
+      - Produce remediation guidance
+    handoff_to:
+      - lead
+      - documentation
+
+  - id: ai_pipeline
+    name: AI Pipeline Agent
+    role: specialist
+    branch: ai
+    responsibilities:
+      - Maintain prompt and multi-agent pipeline quality
+      - Tune decomposition/component mapping logic
+      - Track extraction and graph consistency metrics
+    handoff_to:
+      - backend
+      - qa
+      - documentation
+
+  - id: documentation
+    name: Documentation Agent
+    role: specialist
+    branch: docs
+    responsibilities:
+      - Keep project docs and ADRs up to date
+      - Sync contracts, runbooks, and decision logs
+      - Prepare release notes
+    handoff_to:
+      - lead
+
+routing_rules:
+  - condition: "task needs decomposition or execution planning"
+    keywords: ["complex", "multi-step", "multistep", "cross-branch", "cross-functional", "decompose", "subtask", "plan", "strategy", "roadmap"]
+    call: [planning]
+  - condition: "task touches UI or UX"
+    keywords: ["ui", "ux", "frontend", "client", "react", "layout", "design", "accessibility", "a11y", "visualization"]
+    call: [frontend]
+  - condition: "task touches API or business logic"
+    keywords: ["api", "backend", "service", "endpoint", "business logic", "domain", "fastapi", "integration"]
+    call: [backend]
+  - condition: "task changes schema or migrations"
+    keywords: ["database", "db", "schema", "migration", "index", "sql", "postgres", "pgvector"]
+    call: [database]
+  - condition: "task changes build/deploy/infra"
+    keywords: ["devops", "deploy", "pipeline", "ci", "cd", "docker", "kubernetes", "infra", "monitoring"]
+    call: [devops]
+  - condition: "task changes auth/security/data access"
+    keywords: ["security", "auth", "authentication", "authorization", "rbac", "secret", "vulnerability", "audit"]
+    call: [security]
+  - condition: "task changes AI decomposition or orchestration"
+    keywords: ["ai", "agent", "prompt", "llm", "rag", "langgraph", "decomposition", "orchestration"]
+    call: [ai_pipeline]
+  - condition: "task reaches implementation checkpoint"
+    keywords: ["test", "qa", "verification", "regression", "e2e", "acceptance"]
+    call: [qa]
+  - condition: "any contract or behavior changed"
+    keywords: ["doc", "docs", "documentation", "adr", "contract", "spec", "readme", "changelog"]
+    call: [documentation]
+
+escalation:
+  blocked_timeout_minutes: 30
+  levels:
+    - level: 1
+      owner: lead
+      action: "Re-plan and reassign"
+    - level: 2
+      owner: human_reviewer
+      action: "Manual decision on priority/scope/architecture"
