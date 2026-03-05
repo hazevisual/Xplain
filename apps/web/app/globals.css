@@ -280,6 +280,79 @@ textarea {
   background: #090909;
 }
 
+.graphFilters {
+  margin-bottom: var(--space-md);
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.levelFilters,
+.typeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.filterBtn,
+.typeBtn {
+  border: 1px solid #363636;
+  border-radius: 9px;
+  background: #131313;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  padding: 0.32rem 0.62rem;
+  cursor: pointer;
+}
+
+.filterBtn.active,
+.typeBtn.active {
+  border-color: #5a5a5a;
+  background: #1a1a1a;
+  color: var(--text);
+}
+
+.qualityGrid {
+  margin-top: var(--space-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.6rem;
+}
+
+.qualityItem {
+  border: 1px solid #2c2c2c;
+  border-radius: 10px;
+  background: #101010;
+  padding: 0.55rem 0.68rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.qualityItem span {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.qualityItem strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.warningBlock {
+  margin-top: var(--space-md);
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  background: #101010;
+  padding: 0.72rem 0.82rem;
+}
+
+.warningBlock h3 {
+  margin: 0 0 0.42rem;
+}
+
+.warningBlock ul {
+  margin: 0;
+}
+
 .react-flow__attribution {
   display: none;
 }

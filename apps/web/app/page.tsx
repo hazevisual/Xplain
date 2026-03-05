@@ -26,6 +26,12 @@ type ProcessSummary = {
   version: number;
 };
 
+type GraphQuality = {
+  coverage_percent: number;
+  dangling_nodes: string[];
+  naming_consistency_percent: number;
+};
+
 type ProcessDetails = ProcessSummary & {
   created_at: string;
   graph: {
@@ -35,16 +41,34 @@ type ProcessDetails = ProcessSummary & {
     edges: GraphEdge[];
     warnings: string[];
     sourceRefs: string[];
+    quality?: GraphQuality;
   };
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const LEVEL_FILTERS = ["ALL", "L1", "L2", "L3"] as const;
+type LevelFilter = (typeof LEVEL_FILTERS)[number];
+const NODE_TYPES: GraphNode["type"][] = ["stage", "subprocess", "component", "data", "actor"];
+const NODE_TYPE_LABELS: Record<GraphNode["type"], string> = {
+  stage: "Stage",
+  subprocess: "Subprocess",
+  component: "Component",
+  data: "Data",
+  actor: "Actor",
+};
 
-function toFlow(graph: ProcessDetails["graph"] | null): { nodes: Node[]; edges: Edge[] } {
+function toFlow(
+  graph: ProcessDetails["graph"] | null,
+  levelFilter: LevelFilter,
+  typeFilter: Record<GraphNode["type"], boolean>
+): { nodes: Node[]; edges: Edge[] } {
   if (!graph) return { nodes: [], edges: [] };
 
   const grouped = { L1: [] as GraphNode[], L2: [] as GraphNode[], L3: [] as GraphNode[] };
-  graph.nodes.forEach((n) => grouped[n.level].push(n));
+  graph.nodes
+    .filter((node) => (levelFilter === "ALL" ? true : node.level === levelFilter))
+    .filter((node) => typeFilter[node.type])
+    .forEach((n) => grouped[n.level].push(n));
 
   const xByLevel = { L1: 80, L2: 420, L3: 760 };
   const colorByType: Record<GraphNode["type"], string> = {
@@ -107,8 +131,20 @@ export default function HomePage() {
   const [executing, setExecuting] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("ALL");
+  const [typeFilter, setTypeFilter] = useState<Record<GraphNode["type"], boolean>>({
+    stage: true,
+    subprocess: true,
+    component: true,
+    data: true,
+    actor: true,
+  });
 
-  const flow = useMemo(() => toFlow(result?.graph ?? null), [result?.graph]);
+  const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
+
+  function toggleTypeFilter(nodeType: GraphNode["type"]): void {
+    setTypeFilter((prev) => ({ ...prev, [nodeType]: !prev[nodeType] }));
+  }
 
   async function loadHistory(): Promise<void> {
     setLoadingHistory(true);
@@ -247,8 +283,32 @@ export default function HomePage() {
                 <div className="resultHead">
                   <h2>Graph</h2>
                   <p>
-                    {result.title} | v{result.version} | {result.graph.nodes.length} nodes
+                    {result.title} | v{result.version} | {flow.nodes.length}/{result.graph.nodes.length} nodes
                   </p>
+                </div>
+                <div className="graphFilters">
+                  <div className="levelFilters">
+                    {LEVEL_FILTERS.map((level) => (
+                      <button
+                        key={level}
+                        className={level === levelFilter ? "filterBtn active" : "filterBtn"}
+                        onClick={() => setLevelFilter(level)}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="typeFilters">
+                    {NODE_TYPES.map((nodeType) => (
+                      <button
+                        key={nodeType}
+                        className={typeFilter[nodeType] ? "typeBtn active" : "typeBtn"}
+                        onClick={() => toggleTypeFilter(nodeType)}
+                      >
+                        {NODE_TYPE_LABELS[nodeType]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="graphPanel">
                   <ReactFlow nodes={flow.nodes} edges={flow.edges} fitView nodesDraggable={false} nodesConnectable={false}>
@@ -256,6 +316,30 @@ export default function HomePage() {
                     <Controls />
                   </ReactFlow>
                 </div>
+                <div className="qualityGrid">
+                  <article className="qualityItem">
+                    <span>Coverage</span>
+                    <strong>{Math.round(result.graph.quality?.coverage_percent ?? 0)}%</strong>
+                  </article>
+                  <article className="qualityItem">
+                    <span>Naming</span>
+                    <strong>{Math.round(result.graph.quality?.naming_consistency_percent ?? 0)}%</strong>
+                  </article>
+                  <article className="qualityItem">
+                    <span>Dangling Nodes</span>
+                    <strong>{result.graph.quality?.dangling_nodes.length ?? 0}</strong>
+                  </article>
+                </div>
+                {result.graph.warnings.length > 0 ? (
+                  <div className="warningBlock">
+                    <h3>Warnings</h3>
+                    <ul>
+                      {result.graph.warnings.map((warning, idx) => (
+                        <li key={`${warning}-${idx}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </section>
 
               <section className="resultCard">
