@@ -49,6 +49,12 @@ All API errors return a stable envelope:
 }
 ```
 
+## Lifecycle Workflow
+
+- Process statuses: `draft -> in_review -> approved`.
+- Transition endpoint: `POST /api/v1/processes/{id}/status`.
+- Graph generation and manual updates are allowed only in `draft`.
+
 ## Planned Scope
 
 - Process/version CRUD.

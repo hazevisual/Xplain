@@ -5,7 +5,21 @@ from threading import Lock
 from typing import Protocol
 from uuid import uuid4
 
-from .schemas import ProcessCreateRequest, ProcessDetails, ProcessGraph, ProcessRevisionSummary, ProcessSummary, ProcessUpdateRequest
+from .schemas import (
+    ProcessCreateRequest,
+    ProcessDetails,
+    ProcessGraph,
+    ProcessRevisionSummary,
+    ProcessStatus,
+    ProcessSummary,
+    ProcessUpdateRequest,
+)
+
+ALLOWED_STATUS_TRANSITIONS: dict[ProcessStatus, set[ProcessStatus]] = {
+    ProcessStatus.draft: {ProcessStatus.in_review},
+    ProcessStatus.in_review: {ProcessStatus.approved},
+    ProcessStatus.approved: set(),
+}
 
 
 class ProcessStore(Protocol):
@@ -25,6 +39,9 @@ class ProcessStore(Protocol):
         ...
 
     def list_revisions(self, process_id: str) -> list[ProcessRevisionSummary]:
+        ...
+
+    def transition_status(self, process_id: str, target_status: ProcessStatus) -> ProcessDetails | None:
         ...
 
 
@@ -54,6 +71,7 @@ class InMemoryProcessStore:
                     description=item.description,
                     updated_at=item.updated_at,
                     version=item.version,
+                    status=item.status,
                 )
                 for item in sorted(self._data.values(), key=lambda i: i.updated_at, reverse=True)
             ]
@@ -85,6 +103,7 @@ class InMemoryProcessStore:
             created_at=now,
             updated_at=now,
             version=graph.version,
+            status=ProcessStatus.draft,
             graph=graph,
         )
 
@@ -134,3 +153,21 @@ class InMemoryProcessStore:
             versions = self._revisions.get(process_id, {})
             snapshots = [versions[v] for v in sorted(versions.keys(), reverse=True)]
             return [self._to_revision_summary(item) for item in snapshots]
+
+    def transition_status(self, process_id: str, target_status: ProcessStatus) -> ProcessDetails | None:
+        with self._lock:
+            existing = self._data.get(process_id)
+            if not existing:
+                return None
+
+            current_status = existing.status
+            allowed = ALLOWED_STATUS_TRANSITIONS[current_status]
+            if target_status not in allowed and target_status != current_status:
+                raise ValueError(f"Invalid transition: {current_status} -> {target_status}")
+
+            updated = existing.model_copy(
+                update={"status": target_status, "updated_at": datetime.now(UTC)},
+                deep=True,
+            )
+            self._data[process_id] = updated
+            return updated.model_copy(deep=True)

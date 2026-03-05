@@ -13,12 +13,14 @@ class ProcessRecord(Base):
     __table_args__ = (
         Index("ix_processes_updated_at", "updated_at"),
         Index("ix_processes_created_at", "created_at"),
+        Index("ix_processes_status", "status"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
     graph: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)

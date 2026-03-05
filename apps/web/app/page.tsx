@@ -24,6 +24,7 @@ type ProcessSummary = {
   description: string | null;
   updated_at: string;
   version: number;
+  status: ProcessStatus;
 };
 
 type ProcessRevisionSummary = {
@@ -40,6 +41,8 @@ type GraphQuality = {
   dangling_nodes: string[];
   naming_consistency_percent: number;
 };
+
+type ProcessStatus = "draft" | "in_review" | "approved";
 
 type ProcessDetails = ProcessSummary & {
   created_at: string;
@@ -72,6 +75,27 @@ const NODE_TYPE_LABELS: Record<GraphNode["type"], string> = {
   data: "Data",
   actor: "Actor",
 };
+const STATUS_LABEL: Record<ProcessStatus, string> = {
+  draft: "Draft",
+  in_review: "In Review",
+  approved: "Approved",
+};
+const NEXT_STATUS: Record<ProcessStatus, ProcessStatus | null> = {
+  draft: "in_review",
+  in_review: "approved",
+  approved: null,
+};
+const NEXT_STATUS_LABEL: Record<ProcessStatus, string | null> = {
+  draft: "Send to Review",
+  in_review: "Approve",
+  approved: null,
+};
+
+function getApiErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+  const obj = payload as { error?: { message?: string } };
+  return obj.error?.message ?? fallback;
+}
 
 function buildInsights(graph: ProcessDetails["graph"] | null): GraphInsights {
   if (!graph) {
@@ -199,6 +223,7 @@ export default function HomePage() {
     actor: true,
   });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
   const insights = useMemo(() => buildInsights(result?.graph ?? null), [result?.graph]);
@@ -276,7 +301,8 @@ export default function HomePage() {
     setError(null);
     const res = await fetch(`${API_BASE}/api/v1/processes/${id}`, { cache: "no-store" });
     if (!res.ok) {
-      setError("Failed to open process");
+      const payload = await res.json().catch(() => null);
+      setError(getApiErrorMessage(payload, "Failed to open process"));
       return;
     }
     const details = (await res.json()) as ProcessDetails;
@@ -287,6 +313,11 @@ export default function HomePage() {
   }
 
   async function onExecute(): Promise<void> {
+    if (result && result.status !== "draft") {
+      setError(`Process is ${STATUS_LABEL[result.status].toLowerCase()}. Create a new XPlain to continue editing.`);
+      return;
+    }
+
     const source = inputText.trim();
     if (!source) {
       setError("Please provide text first.");
@@ -304,7 +335,10 @@ export default function HomePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title, description: source }),
         });
-        if (!createdRes.ok) throw new Error("Failed to create process.");
+        if (!createdRes.ok) {
+          const payload = await createdRes.json().catch(() => null);
+          throw new Error(getApiErrorMessage(payload, "Failed to create process."));
+        }
         const created = (await createdRes.json()) as ProcessDetails;
         id = created.id;
         setSelectedId(id);
@@ -315,7 +349,10 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: source }),
       });
-      if (!genRes.ok) throw new Error("Failed to generate visual explanation.");
+      if (!genRes.ok) {
+        const payload = await genRes.json().catch(() => null);
+        throw new Error(getApiErrorMessage(payload, "Failed to generate visual explanation."));
+      }
       const generated = (await genRes.json()) as ProcessDetails;
       setResult(generated);
       setSelectedNodeId(null);
@@ -325,6 +362,33 @@ export default function HomePage() {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
       setExecuting(false);
+    }
+  }
+
+  async function onTransitionStatus(targetStatus: ProcessStatus): Promise<void> {
+    if (!result) return;
+
+    setStatusUpdating(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/processes/${result.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetStatus }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(getApiErrorMessage(payload, "Failed to update process status."));
+      }
+
+      const updated = (await res.json()) as ProcessDetails;
+      setResult(updated);
+      await loadHistory();
+      await loadRevisions(updated.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unexpected error.");
+    } finally {
+      setStatusUpdating(false);
     }
   }
 
@@ -359,7 +423,9 @@ export default function HomePage() {
                 <li key={p.id}>
                   <button className={p.id === selectedId ? "historyItem active" : "historyItem"} onClick={() => void openProcess(p.id)}>
                     <span>{p.title}</span>
-                    <small>v{p.version}</small>
+                    <small>
+                      v{p.version} | {STATUS_LABEL[p.status]}
+                    </small>
                   </button>
                 </li>
               ))}
@@ -387,12 +453,27 @@ export default function HomePage() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Describe complex process, term, or workflow..."
+              disabled={result?.status === "in_review" || result?.status === "approved"}
             />
             <div className="composerFooter">
-              <span className="chip">Version 1.0</span>
-              <button className="xplainBtn" onClick={() => void onExecute()} disabled={executing}>
-                {executing ? "XPlaining..." : "XPlain"}
-              </button>
+              <div className="statusGroup">
+                <span className="chip">Version 1.0</span>
+                {result ? <span className={`statusChip ${result.status}`}>{STATUS_LABEL[result.status]}</span> : null}
+              </div>
+              <div className="composerActions">
+                {result && NEXT_STATUS[result.status] ? (
+                  <button
+                    className="statusActionBtn"
+                    onClick={() => void onTransitionStatus(NEXT_STATUS[result.status] as ProcessStatus)}
+                    disabled={statusUpdating}
+                  >
+                    {statusUpdating ? "Updating..." : NEXT_STATUS_LABEL[result.status]}
+                  </button>
+                ) : null}
+                <button className="xplainBtn" onClick={() => void onExecute()} disabled={executing || (result ? result.status !== "draft" : false)}>
+                  {executing ? "XPlaining..." : "XPlain"}
+                </button>
+              </div>
             </div>
           </section>
 

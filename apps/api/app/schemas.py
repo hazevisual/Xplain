@@ -28,6 +28,12 @@ class EdgeKind(str, Enum):
     produces = "produces"
 
 
+class ProcessStatus(str, Enum):
+    draft = "draft"
+    in_review = "in_review"
+    approved = "approved"
+
+
 class ProcessNode(BaseModel):
     id: str = Field(min_length=1)
     type: NodeType
@@ -120,6 +126,12 @@ class GenerateGraphRequest(BaseModel):
         return value.strip()
 
 
+class ProcessStatusTransitionRequest(BaseModel):
+    target_status: ProcessStatus = Field(alias="targetStatus")
+
+    model_config = {"populate_by_name": True}
+
+
 class ErrorPayload(BaseModel):
     code: str = Field(min_length=1)
     message: str = Field(min_length=1)
@@ -136,6 +148,7 @@ class ProcessSummary(BaseModel):
     description: str | None = None
     updated_at: datetime
     version: int
+    status: ProcessStatus
 
 
 class ProcessRevisionSummary(BaseModel):

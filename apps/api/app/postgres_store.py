@@ -12,9 +12,16 @@ from .schemas import (
     ProcessDetails,
     ProcessGraph,
     ProcessRevisionSummary,
+    ProcessStatus,
     ProcessSummary,
     ProcessUpdateRequest,
 )
+
+ALLOWED_STATUS_TRANSITIONS: dict[ProcessStatus, set[ProcessStatus]] = {
+    ProcessStatus.draft: {ProcessStatus.in_review},
+    ProcessStatus.in_review: {ProcessStatus.approved},
+    ProcessStatus.approved: set(),
+}
 
 
 class PostgresProcessStore:
@@ -29,6 +36,7 @@ class PostgresProcessStore:
             description=record.description,
             updated_at=record.updated_at,
             version=record.version,
+            status=ProcessStatus(record.status),
         )
 
     @staticmethod
@@ -41,6 +49,7 @@ class PostgresProcessStore:
             created_at=record.created_at,
             updated_at=record.updated_at,
             version=record.version,
+            status=ProcessStatus(record.status),
             graph=graph,
         )
 
@@ -119,6 +128,7 @@ class PostgresProcessStore:
             title=payload.title,
             description=payload.description,
             version=graph.version,
+            status=ProcessStatus.draft.value,
             graph=graph.model_dump(by_alias=True),
             created_at=now,
             updated_at=now,
@@ -204,3 +214,20 @@ class PostgresProcessStore:
                 )
             ]
 
+    def transition_status(self, process_id: str, target_status: ProcessStatus) -> ProcessDetails | None:
+        with self._session_factory() as session:
+            row = session.get(ProcessRecord, process_id)
+            if not row:
+                return None
+
+            current_status = ProcessStatus(row.status)
+            allowed = ALLOWED_STATUS_TRANSITIONS[current_status]
+            if target_status not in allowed and target_status != current_status:
+                raise ValueError(f"Invalid transition: {current_status} -> {target_status}")
+
+            row.status = target_status.value
+            row.updated_at = datetime.now(UTC)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return self._to_details(row)

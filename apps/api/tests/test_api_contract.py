@@ -75,3 +75,42 @@ def test_generate_graph_success_increments_version() -> None:
     assert len(revisions_payload) >= 2
     assert revisions_payload[0]["version"] == initial["version"] + 1
     assert revisions_payload[1]["version"] == initial["version"]
+
+
+def test_lifecycle_transition_and_locking() -> None:
+    created = client.post(
+        "/api/v1/processes",
+        json={"title": "Lifecycle Demo", "description": "One. Two."},
+    )
+    assert created.status_code == 201
+    process = created.json()
+    process_id = process["id"]
+    assert process["status"] == "draft"
+
+    review = client.post(
+        f"/api/v1/processes/{process_id}/status",
+        json={"targetStatus": "in_review"},
+    )
+    assert review.status_code == 200
+    assert review.json()["status"] == "in_review"
+
+    locked_generation = client.post(
+        f"/api/v1/processes/{process_id}/generate-graph",
+        json={"text": "One. Two."},
+    )
+    assert locked_generation.status_code == 409
+    assert locked_generation.json()["error"]["code"] == "process_locked"
+
+    approved = client.post(
+        f"/api/v1/processes/{process_id}/status",
+        json={"targetStatus": "approved"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+
+    invalid_back_transition = client.post(
+        f"/api/v1/processes/{process_id}/status",
+        json={"targetStatus": "draft"},
+    )
+    assert invalid_back_transition.status_code == 409
+    assert invalid_back_transition.json()["error"]["code"] == "invalid_status_transition"

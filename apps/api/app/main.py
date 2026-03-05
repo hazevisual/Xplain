@@ -15,6 +15,8 @@ from .schemas import (
     ProcessCreateRequest,
     ProcessDetails,
     ProcessRevisionSummary,
+    ProcessStatus,
+    ProcessStatusTransitionRequest,
     ProcessSummary,
     ProcessUpdateRequest,
 )
@@ -38,6 +40,7 @@ app.add_middleware(
 
 API_ERROR_RESPONSES = {
     status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid request input"},
+    status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "Invalid process state transition"},
     status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Process not found"},
     status.HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponse, "description": "Request validation failed"},
     status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse, "description": "Internal server error"},
@@ -106,9 +109,9 @@ def health() -> dict[str, str]:
 def meta() -> dict[str, str]:
     return {
         "service": "xplain-api",
-        "stage": "phase-2-versioning",
+        "stage": "phase-3-workflow",
         "storage": storage_backend,
-        "message": "Process CRUD API with validation, quality metrics, and revision tracking is ready",
+        "message": "Process CRUD API with lifecycle workflow, quality metrics, and revision tracking is ready",
     }
 
 
@@ -145,6 +148,17 @@ def list_process_revisions(process_id: str) -> list[ProcessRevisionSummary]:
 
 @app.put("/api/v1/processes/{process_id}", response_model=ProcessDetails, responses=API_ERROR_RESPONSES)
 def update_process(process_id: str, payload: ProcessUpdateRequest) -> ProcessDetails:
+    process = store.get(process_id)
+    if process is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    if process.status != ProcessStatus.draft:
+        raise_api_error(
+            status.HTTP_409_CONFLICT,
+            "process_locked",
+            "Only draft processes can be edited",
+            details={"status": process.status.value},
+        )
+
     process = store.update(process_id, payload)
     if process is None:
         raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
@@ -164,6 +178,13 @@ def generate_graph(process_id: str, payload: GenerateGraphRequest) -> ProcessDet
     process = store.get(process_id)
     if process is None:
         raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    if process.status != ProcessStatus.draft:
+        raise_api_error(
+            status.HTTP_409_CONFLICT,
+            "process_locked",
+            "Only draft processes can generate graphs",
+            details={"status": process.status.value},
+        )
 
     source_text = payload.text
     if source_text is None:
@@ -199,6 +220,27 @@ def generate_graph(process_id: str, payload: GenerateGraphRequest) -> ProcessDet
             graph=graph,
         ),
     )
+    if updated is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    return updated
+
+
+@app.post("/api/v1/processes/{process_id}/status", response_model=ProcessDetails, responses=API_ERROR_RESPONSES)
+def transition_process_status(process_id: str, payload: ProcessStatusTransitionRequest) -> ProcessDetails:
+    process = store.get(process_id)
+    if process is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+
+    try:
+        updated = store.transition_status(process_id, payload.target_status)
+    except ValueError as exc:
+        raise_api_error(
+            status.HTTP_409_CONFLICT,
+            "invalid_status_transition",
+            str(exc),
+            details={"current_status": process.status.value, "target_status": payload.target_status.value},
+        )
+
     if updated is None:
         raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
     return updated

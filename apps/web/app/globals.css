@@ -207,12 +207,61 @@ textarea {
   gap: 0.65rem;
 }
 
+.statusGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  flex-wrap: wrap;
+}
+
 .chip {
   border: 1px solid #3b3b3b;
   border-radius: 999px;
   padding: 0.23rem 0.56rem;
   color: var(--text-soft);
   font-size: 0.78rem;
+}
+
+.statusChip {
+  border: 1px solid #3d3d3d;
+  border-radius: 999px;
+  padding: 0.23rem 0.56rem;
+  font-size: 0.78rem;
+  color: #d8d8d8;
+  background: #161616;
+}
+
+.statusChip.draft {
+  border-color: #4a4a4a;
+}
+
+.statusChip.in_review {
+  border-color: #666;
+}
+
+.statusChip.approved {
+  border-color: #7d7d7d;
+}
+
+.composerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+}
+
+.statusActionBtn {
+  border: 1px solid #5b5b5b;
+  border-radius: 10px;
+  background: #1b1b1b;
+  color: var(--text);
+  padding: 0.56rem 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.statusActionBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .xplainBtn {
@@ -564,6 +613,15 @@ li {
 @media (max-width: 880px) {
   .mainArea {
     padding: 0.85rem;
+  }
+
+  .composerFooter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .composerActions {
+    justify-content: flex-end;
   }
 
   .graphPanel {
