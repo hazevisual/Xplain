@@ -15,6 +15,7 @@ Web application for visually describing complex processes using interactive diag
 - Required agent branches (before development): [agents/branches/README.md](agents/branches/README.md)
 - Task card/state log standard: [docs/TASK_RUNBOOK.md](docs/TASK_RUNBOOK.md)
 - Release readiness checklist: [docs/RELEASE_READINESS_CHECKLIST.md](docs/RELEASE_READINESS_CHECKLIST.md)
+- MVP handoff package: [docs/MVP_HANDOFF_20260306.md](docs/MVP_HANDOFF_20260306.md)
 
 ## Current Stage Goal
 

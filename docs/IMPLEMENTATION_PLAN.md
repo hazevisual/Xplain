@@ -1,5 +1,22 @@
 # Implementation Plan
 
+## Current Delivery Snapshot (2026-03-06)
+
+- Completed in current baseline:
+  - MVP process CRUD and text-to-graph generation.
+  - Graph quality metrics and warnings contract.
+  - Workspace filters, node drill-down, insights.
+  - Revision history and version compare.
+  - Lifecycle moderation (`draft -> in_review -> approved`).
+  - Review comments for process/node/edge.
+  - Unified regression runner and release checklist.
+- Pending tracks for next delivery:
+  - auth/RBAC,
+  - export pipeline,
+  - async workers,
+  - CI/CD automation,
+  - large-graph performance hardening.
+
 ## Phase 0. Foundation Setup (1-2 days)
 
 - Initialize monorepo: `apps/web`, `apps/api`, `packages/shared`.
