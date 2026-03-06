@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .db import SessionLocal
 from .graph_generator import generate_process_graph
+from .narrative_generator import generate_process_narrative
 from .postgres_store import PostgresProcessStore
 from .schemas import (
     ErrorResponse,
@@ -16,6 +17,7 @@ from .schemas import (
     ProcessCommentCreateRequest,
     ProcessCreateRequest,
     ProcessDetails,
+    ProcessNarrative,
     ProcessRevisionSummary,
     ProcessStatus,
     ProcessStatusTransitionRequest,
@@ -254,6 +256,29 @@ def generate_graph(process_id: str, payload: GenerateGraphRequest) -> ProcessDet
     if updated is None:
         raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
     return updated
+
+
+@app.post("/api/v1/processes/{process_id}/generate-narrative", response_model=ProcessNarrative, responses=API_ERROR_RESPONSES)
+def generate_narrative(process_id: str) -> ProcessNarrative:
+    process = store.get(process_id)
+    if process is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    if len(process.graph.nodes) == 0:
+        raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "graph_missing",
+            "Graph is empty. Generate graph before requesting narrative",
+        )
+
+    try:
+        return generate_process_narrative(process)
+    except Exception as exc:  # noqa: BLE001
+        raise_api_error(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "narrative_generation_failed",
+            "Narrative generation failed",
+            details={"reason": str(exc)},
+        )
 
 
 @app.post("/api/v1/processes/{process_id}/status", response_model=ProcessDetails, responses=API_ERROR_RESPONSES)

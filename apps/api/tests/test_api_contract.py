@@ -77,6 +77,51 @@ def test_generate_graph_success_increments_version() -> None:
     assert revisions_payload[1]["version"] == initial["version"]
 
 
+def test_generate_narrative_requires_generated_graph() -> None:
+    created = client.post("/api/v1/processes", json={"title": "Narrative Without Graph", "description": "Sample"})
+    assert created.status_code == 201
+    process_id = created.json()["id"]
+
+    response = client.post(f"/api/v1/processes/{process_id}/generate-narrative")
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "graph_missing"
+    assert payload["error"]["message"] == "Graph is empty. Generate graph before requesting narrative"
+
+
+def test_generate_narrative_success_returns_structured_sections() -> None:
+    created = client.post(
+        "/api/v1/processes",
+        json={
+            "title": "Narrative Demo",
+            "description": "User submits form. Backend validates data. Service stores report in database.",
+        },
+    )
+    assert created.status_code == 201
+    process_id = created.json()["id"]
+
+    generated = client.post(f"/api/v1/processes/{process_id}/generate-graph", json={"text": None})
+    assert generated.status_code == 200
+
+    response = client.post(f"/api/v1/processes/{process_id}/generate-narrative")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["processId"] == process_id
+    assert payload["version"] >= 1
+    assert isinstance(payload["summary"], str)
+    assert payload["summary"]
+    assert isinstance(payload["steps"], list)
+    assert len(payload["steps"]) >= 1
+    assert {"id", "title", "detail"} <= set(payload["steps"][0].keys())
+    assert isinstance(payload["keyDependencies"], list)
+    assert isinstance(payload["references"], list)
+    assert len(payload["references"]) >= 1
+    assert payload["generatedBy"] == "generated:rule-based:narrative:v1"
+    assert "generated:rule-based:v2" in payload["sourceRefs"]
+
+
 def test_lifecycle_transition_and_locking() -> None:
     created = client.post(
         "/api/v1/processes",

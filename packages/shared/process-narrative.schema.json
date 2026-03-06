@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xplain.local/schemas/process-narrative.schema.json",
+  "title": "ProcessNarrative",
+  "type": "object",
+  "required": [
+    "processId",
+    "version",
+    "summary",
+    "steps",
+    "keyDependencies",
+    "references",
+    "qualityNotes",
+    "sourceRefs",
+    "generatedBy"
+  ],
+  "properties": {
+    "processId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "default": []
+    },
+    "keyDependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dependency"
+      },
+      "default": []
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reference"
+      },
+      "default": []
+    },
+    "qualityNotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "generatedBy": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": ["id", "title", "detail"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "dependency": {
+      "type": "object",
+      "required": ["fromNodeId", "fromTitle", "toNodeId", "toTitle", "relation"],
+      "properties": {
+        "fromNodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fromTitle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toNodeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toTitle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relation": {
+          "type": "string",
+          "enum": ["flow", "depends_on", "uses", "produces"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "reference": {
+      "type": "object",
+      "required": ["label", "ref"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -212,6 +212,41 @@ class ProcessComment(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class NarrativeStep(BaseModel):
+    id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    detail: str = Field(min_length=1)
+
+
+class NarrativeDependency(BaseModel):
+    from_node_id: str = Field(alias="fromNodeId", min_length=1)
+    from_title: str = Field(alias="fromTitle", min_length=1)
+    to_node_id: str = Field(alias="toNodeId", min_length=1)
+    to_title: str = Field(alias="toTitle", min_length=1)
+    relation: EdgeKind
+
+    model_config = {"populate_by_name": True}
+
+
+class NarrativeReference(BaseModel):
+    label: str = Field(min_length=1)
+    ref: str = Field(min_length=1)
+
+
+class ProcessNarrative(BaseModel):
+    process_id: str = Field(alias="processId", min_length=1)
+    version: int = Field(ge=1)
+    summary: str = Field(min_length=1)
+    steps: list[NarrativeStep] = Field(default_factory=list)
+    key_dependencies: list[NarrativeDependency] = Field(alias="keyDependencies", default_factory=list)
+    references: list[NarrativeReference] = Field(default_factory=list)
+    quality_notes: list[str] = Field(alias="qualityNotes", default_factory=list)
+    source_refs: list[str] = Field(alias="sourceRefs", default_factory=list)
+    generated_by: str = Field(alias="generatedBy", min_length=1)
+
+    model_config = {"populate_by_name": True}
+
+
 class ProcessDetails(ProcessSummary):
     created_at: datetime
     graph: ProcessGraph

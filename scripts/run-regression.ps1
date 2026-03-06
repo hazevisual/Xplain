@@ -153,6 +153,20 @@ try {
             throw "Generated graph has no nodes/edges"
         }
 
+        $narrative = Invoke-JsonRequest -Method POST -Uri "$apiBase/$processId/generate-narrative" -Body $null
+        if ($narrative.StatusCode -ne 200) {
+            throw "Generate narrative failed with status $($narrative.StatusCode)"
+        }
+        if (-not $narrative.Body.summary) {
+            throw "Generated narrative has empty summary"
+        }
+        if ($narrative.Body.steps.Count -lt 1) {
+            throw "Generated narrative has no steps"
+        }
+        if (-not $narrative.Body.generatedBy) {
+            throw "Generated narrative has no generatedBy marker"
+        }
+
         $nodeId = $generated.Body.graph.nodes[0].id
         $edgeId = $generated.Body.graph.edges[0].id
 
@@ -210,6 +224,8 @@ try {
         $summary = [ordered]@{
             processId = $processId
             graphVersion = [int]$generated.Body.version
+            narrativeSteps = [int]$narrative.Body.steps.Count
+            narrativeRefs = [int]$narrative.Body.references.Count
             revisions = [int]$revisions.Body.Count
             comments = [int]$comments.Body.Count
             status = [string]$statusInReview.Body.status

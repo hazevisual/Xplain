@@ -57,6 +57,37 @@ type ProcessDetails = ProcessSummary & {
   };
 };
 
+type NarrativeStep = {
+  id: string;
+  title: string;
+  detail: string;
+};
+
+type NarrativeDependency = {
+  fromNodeId: string;
+  fromTitle: string;
+  toNodeId: string;
+  toTitle: string;
+  relation: GraphEdge["kind"];
+};
+
+type NarrativeReference = {
+  label: string;
+  ref: string;
+};
+
+type ProcessNarrative = {
+  processId: string;
+  version: number;
+  summary: string;
+  steps: NarrativeStep[];
+  keyDependencies: NarrativeDependency[];
+  references: NarrativeReference[];
+  qualityNotes: string[];
+  sourceRefs: string[];
+  generatedBy: string;
+};
+
 type GraphInsights = {
   criticalDependencies: number;
   actorCount: number;
@@ -243,6 +274,8 @@ export default function HomePage() {
   const [commentTargetId, setCommentTargetId] = useState<string>("");
   const [commentAuthor, setCommentAuthor] = useState<string>("lead");
   const [commentMessage, setCommentMessage] = useState<string>("");
+  const [narrative, setNarrative] = useState<ProcessNarrative | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
 
   const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
   const insights = useMemo(() => buildInsights(result?.graph ?? null), [result?.graph]);
@@ -341,6 +374,24 @@ export default function HomePage() {
     }
   }
 
+  async function loadNarrative(processId: string): Promise<void> {
+    setNarrativeLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/processes/${processId}/generate-narrative`, {
+        method: "POST",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setNarrative(null);
+        return;
+      }
+      const data = (await res.json()) as ProcessNarrative;
+      setNarrative(data);
+    } finally {
+      setNarrativeLoading(false);
+    }
+  }
+
   async function loadHistory(): Promise<void> {
     setLoadingHistory(true);
     try {
@@ -356,6 +407,7 @@ export default function HomePage() {
   async function openProcess(id: string): Promise<void> {
     setSelectedId(id);
     setError(null);
+    setNarrative(null);
     const res = await fetch(`${API_BASE}/api/v1/processes/${id}`, { cache: "no-store" });
     if (!res.ok) {
       const payload = await res.json().catch(() => null);
@@ -366,7 +418,7 @@ export default function HomePage() {
     setResult(details);
     setInputText(details.description ?? details.title);
     setSelectedNodeId(null);
-    await Promise.all([loadRevisions(id), loadComments(id)]);
+    await Promise.all([loadRevisions(id), loadComments(id), loadNarrative(id)]);
   }
 
   async function onExecute(): Promise<void> {
@@ -413,7 +465,7 @@ export default function HomePage() {
       const generated = (await genRes.json()) as ProcessDetails;
       setResult(generated);
       setSelectedNodeId(null);
-      await Promise.all([loadHistory(), loadRevisions(generated.id), loadComments(generated.id)]);
+      await Promise.all([loadHistory(), loadRevisions(generated.id), loadComments(generated.id), loadNarrative(generated.id)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
@@ -481,7 +533,7 @@ export default function HomePage() {
 
       const updated = (await res.json()) as ProcessDetails;
       setResult(updated);
-      await Promise.all([loadHistory(), loadRevisions(updated.id), loadComments(updated.id)]);
+      await Promise.all([loadHistory(), loadRevisions(updated.id), loadComments(updated.id), loadNarrative(updated.id)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
@@ -509,6 +561,7 @@ export default function HomePage() {
               setCompareRightVersion(null);
               setSelectedNodeId(null);
               setComments([]);
+              setNarrative(null);
               resetCommentForm();
             }}
           >
@@ -676,6 +729,74 @@ export default function HomePage() {
 
               <section className="resultCard">
                 <h2>Description & Links</h2>
+                <div className="narrativeCard">
+                  <div className="narrativeHead">
+                    <h3>Explain Narrative</h3>
+                    {narrative ? <small>v{narrative.version}</small> : null}
+                  </div>
+                  {narrativeLoading ? (
+                    <p className="sideMeta">Generating narrative...</p>
+                  ) : narrative ? (
+                    <>
+                      <p className="narrativeSummary">{narrative.summary}</p>
+                      <div className="narrativeColumns">
+                        <div>
+                          <h4>Breakdown</h4>
+                          <ul className="narrativeList">
+                            {narrative.steps.length > 0 ? (
+                              narrative.steps.map((step, idx) => (
+                                <li key={step.id}>
+                                  <strong>
+                                    {idx + 1}. {step.title}
+                                  </strong>
+                                  <span>{step.detail}</span>
+                                </li>
+                              ))
+                            ) : (
+                              <li>No step breakdown available.</li>
+                            )}
+                          </ul>
+                        </div>
+                        <div>
+                          <h4>Key Dependencies</h4>
+                          <ul className="narrativeList">
+                            {narrative.keyDependencies.length > 0 ? (
+                              narrative.keyDependencies.map((dependency, idx) => (
+                                <li key={`${dependency.fromNodeId}-${dependency.toNodeId}-${idx}`}>
+                                  <strong>
+                                    {dependency.fromTitle} {"->"} {dependency.toTitle}
+                                  </strong>
+                                  <span>{dependency.relation}</span>
+                                </li>
+                              ))
+                            ) : (
+                              <li>No explicit dependencies detected.</li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="narrativeRefs">
+                        <h4>References</h4>
+                        <ul className="narrativeRefsList">
+                          {narrative.references.map((reference, idx) => (
+                            <li key={`${reference.ref}-${idx}`}>
+                              <span>{reference.label}:</span> {reference.ref}
+                            </li>
+                          ))}
+                        </ul>
+                        {narrative.qualityNotes.length > 0 ? (
+                          <ul className="narrativeQualityList">
+                            {narrative.qualityNotes.map((note, idx) => (
+                              <li key={`${note}-${idx}`}>{note}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="sideMeta">Narrative appears after graph generation.</p>
+                  )}
+                </div>
                 <div className="insightGrid">
                   <article className="insightCard">
                     <span>Critical Dependencies</span>

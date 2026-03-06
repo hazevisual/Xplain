@@ -67,6 +67,19 @@ All API errors return a stable envelope:
   - HTTP `400`
   - `error.code = "invalid_comment_target"`
 
+## Explain Narrative
+
+- Generate structured in-app narrative: `POST /api/v1/processes/{id}/generate-narrative`
+- Returns deterministic sections:
+  - `summary`
+  - `steps[]`
+  - `keyDependencies[]`
+  - `references[]`
+  - `qualityNotes[]`
+- If graph is not generated yet:
+  - HTTP `400`
+  - `error.code = "graph_missing"`
+
 ## Planned Scope
 
 - Process/version CRUD.
