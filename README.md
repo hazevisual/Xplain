@@ -14,6 +14,7 @@ Web application for visually describing complex processes using interactive diag
 - Lead Orchestrator (main agent): [docs/LEAD_ORCHESTRATOR.md](docs/LEAD_ORCHESTRATOR.md)
 - Required agent branches (before development): [agents/branches/README.md](agents/branches/README.md)
 - Task card/state log standard: [docs/TASK_RUNBOOK.md](docs/TASK_RUNBOOK.md)
+- Release readiness checklist: [docs/RELEASE_READINESS_CHECKLIST.md](docs/RELEASE_READINESS_CHECKLIST.md)
 
 ## Current Stage Goal
 
@@ -66,4 +67,16 @@ Use the fast probe script instead of long manual loops:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/wait-url.ps1 -Url http://localhost:8000/health
 powershell -ExecutionPolicy Bypass -File scripts/wait-url.ps1 -Url http://localhost:3000
+```
+
+Run full regression + release-readiness gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run-regression.ps1
+```
+
+Shortcut:
+
+```powershell
+npm run qa:regression
 ```

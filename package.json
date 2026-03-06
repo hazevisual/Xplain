@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev:web": "npm run dev --workspace @xplain/web",
-    "lint:web": "npm run lint --workspace @xplain/web"
+    "lint:web": "npm run lint --workspace @xplain/web",
+    "qa:regression": "powershell -ExecutionPolicy Bypass -File scripts/run-regression.ps1"
   }
 }

@@ -88,3 +88,4 @@ This document defines the standard task card and state log format for the agent 
 - Use `scripts/wait-url.ps1` for service readiness checks.
 - Default timeout for readiness probes is `20s`.
 - Avoid manual polling loops with `1s` sleep unless explicitly needed for diagnostics.
+- Use `scripts/run-regression.ps1` as the default end-to-end QA gate before moving a complex task to closure.
