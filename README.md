@@ -16,6 +16,7 @@ Web application for visually describing complex processes using interactive diag
 - Task card/state log standard: [docs/TASK_RUNBOOK.md](docs/TASK_RUNBOOK.md)
 - Release readiness checklist: [docs/RELEASE_READINESS_CHECKLIST.md](docs/RELEASE_READINESS_CHECKLIST.md)
 - MVP handoff package: [docs/MVP_HANDOFF_20260306.md](docs/MVP_HANDOFF_20260306.md)
+- Session report system: [docs/SESSION_REPORT_SYSTEM.md](docs/SESSION_REPORT_SYSTEM.md)
 
 ## Current Stage Goal
 
@@ -80,4 +81,16 @@ Shortcut:
 
 ```powershell
 npm run qa:regression
+```
+
+Session report command:
+
+```powershell
+npm run report:session
+```
+
+Alias command:
+
+```powershell
+npm run Отчет
 ```

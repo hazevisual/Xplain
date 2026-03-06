@@ -89,3 +89,4 @@ This document defines the standard task card and state log format for the agent 
 - Default timeout for readiness probes is `20s`.
 - Avoid manual polling loops with `1s` sleep unless explicitly needed for diagnostics.
 - Use `scripts/run-regression.ps1` as the default end-to-end QA gate before moving a complex task to closure.
+- Use `scripts/session-report.ps1` (or `npm run Отчет`) to generate a standardized end-of-session report in `docs/reports/`.
