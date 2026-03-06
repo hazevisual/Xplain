@@ -6,8 +6,11 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import ProcessRecord, ProcessRevisionRecord
+from .models import ProcessCommentRecord, ProcessRecord, ProcessRevisionRecord
 from .schemas import (
+    CommentTargetType,
+    ProcessComment,
+    ProcessCommentCreateRequest,
     ProcessCreateRequest,
     ProcessDetails,
     ProcessGraph,
@@ -63,6 +66,18 @@ class PostgresProcessStore:
             edges_count=len(graph.edges),
             warnings_count=len(graph.warnings),
             coverage_percent=graph.quality.coverage_percent,
+        )
+
+    @staticmethod
+    def _to_comment(record: ProcessCommentRecord) -> ProcessComment:
+        return ProcessComment(
+            id=record.id,
+            processId=record.process_id,
+            targetType=record.target_type,
+            targetId=record.target_id,
+            message=record.message,
+            author=record.author,
+            createdAt=record.created_at,
         )
 
     @staticmethod
@@ -231,3 +246,41 @@ class PostgresProcessStore:
             session.commit()
             session.refresh(row)
             return self._to_details(row)
+
+    def list_comments(self, process_id: str) -> list[ProcessComment]:
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(ProcessCommentRecord)
+                .where(ProcessCommentRecord.process_id == process_id)
+                .order_by(ProcessCommentRecord.created_at.desc())
+            ).all()
+            return [self._to_comment(row) for row in rows]
+
+    def add_comment(self, process_id: str, payload: ProcessCommentCreateRequest) -> ProcessComment | None:
+        with self._session_factory() as session:
+            process = session.get(ProcessRecord, process_id)
+            if not process:
+                return None
+
+            graph = ProcessGraph.model_validate(process.graph)
+            if payload.target_type == CommentTargetType.node:
+                valid_ids = {node.id for node in graph.nodes}
+                if payload.target_id not in valid_ids:
+                    raise ValueError("targetId does not match any node in current graph")
+            if payload.target_type == CommentTargetType.edge:
+                valid_ids = {edge.id for edge in graph.edges}
+                if payload.target_id not in valid_ids:
+                    raise ValueError("targetId does not match any edge in current graph")
+
+            row = ProcessCommentRecord(
+                process_id=process_id,
+                target_type=payload.target_type.value,
+                target_id=payload.target_id,
+                message=payload.message,
+                author=payload.author or "reviewer",
+                created_at=datetime.now(UTC),
+            )
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return self._to_comment(row)

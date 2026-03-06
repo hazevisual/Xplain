@@ -493,6 +493,85 @@ textarea {
   font-size: 0.95rem;
 }
 
+.commentCard {
+  margin-bottom: var(--space-md);
+  border: 1px solid #2f2f2f;
+  border-radius: 10px;
+  background: #101010;
+  padding: 0.72rem 0.82rem;
+}
+
+.commentCard h3 {
+  margin: 0 0 0.5rem;
+}
+
+.commentForm {
+  display: grid;
+  gap: 0.58rem;
+  margin-bottom: 0.62rem;
+}
+
+.commentFormRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.62rem;
+}
+
+.commentForm label {
+  display: grid;
+  gap: 0.32rem;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+}
+
+.commentForm select,
+.commentForm input {
+  border: 1px solid #363636;
+  border-radius: 8px;
+  background: #131313;
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+}
+
+.commentForm textarea {
+  min-height: 76px;
+}
+
+.commentActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.commentList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.commentItem {
+  border: 1px solid #2b2b2b;
+  border-radius: 9px;
+  background: #121212;
+  padding: 0.5rem 0.6rem;
+  margin: 0;
+}
+
+.commentMeta {
+  margin: 0 0 0.35rem;
+  color: var(--text-soft);
+  font-size: 0.74rem;
+}
+
+.commentMessage {
+  margin: 0;
+  color: #dcdcdc;
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
+
 .warningBlock {
   margin-top: var(--space-md);
   border: 1px solid #3a3a3a;

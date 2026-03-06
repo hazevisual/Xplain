@@ -64,6 +64,18 @@ type GraphInsights = {
   topBottlenecks: Array<{ nodeId: string; title: string; score: number }>;
 };
 
+type CommentTargetType = "process" | "node" | "edge";
+
+type ProcessComment = {
+  id: number;
+  processId: string;
+  targetType: CommentTargetType;
+  targetId: string | null;
+  message: string;
+  author: string;
+  createdAt: string;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const LEVEL_FILTERS = ["ALL", "L1", "L2", "L3"] as const;
 type LevelFilter = (typeof LEVEL_FILTERS)[number];
@@ -224,6 +236,13 @@ export default function HomePage() {
   });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [comments, setComments] = useState<ProcessComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentPosting, setCommentPosting] = useState(false);
+  const [commentTargetType, setCommentTargetType] = useState<CommentTargetType>("process");
+  const [commentTargetId, setCommentTargetId] = useState<string>("");
+  const [commentAuthor, setCommentAuthor] = useState<string>("lead");
+  const [commentMessage, setCommentMessage] = useState<string>("");
 
   const flow = useMemo(() => toFlow(result?.graph ?? null, levelFilter, typeFilter), [result?.graph, levelFilter, typeFilter]);
   const insights = useMemo(() => buildInsights(result?.graph ?? null), [result?.graph]);
@@ -253,6 +272,22 @@ export default function HomePage() {
       })),
     };
   }, [result, selectedNodeId]);
+  const availableCommentTargets = useMemo(() => {
+    if (!result) return [];
+    if (commentTargetType === "node") {
+      return result.graph.nodes.map((node) => ({
+        id: node.id,
+        label: `${node.title} (${node.id})`,
+      }));
+    }
+    if (commentTargetType === "edge") {
+      return result.graph.edges.map((edge) => ({
+        id: edge.id,
+        label: `${edge.from} -> ${edge.to} (${edge.kind})`,
+      }));
+    }
+    return [];
+  }, [result, commentTargetType]);
 
   function toggleTypeFilter(nodeType: GraphNode["type"]): void {
     setTypeFilter((prev) => ({ ...prev, [nodeType]: !prev[nodeType] }));
@@ -271,6 +306,13 @@ export default function HomePage() {
     setCompareRightVersion(right);
   }
 
+  function resetCommentForm(): void {
+    setCommentTargetType("process");
+    setCommentTargetId("");
+    setCommentAuthor("lead");
+    setCommentMessage("");
+  }
+
   async function loadRevisions(processId: string): Promise<void> {
     const res = await fetch(`${API_BASE}/api/v1/processes/${processId}/revisions`, { cache: "no-store" });
     if (!res.ok) {
@@ -282,6 +324,21 @@ export default function HomePage() {
     const data = (await res.json()) as ProcessRevisionSummary[];
     setRevisions(data);
     initializeCompareVersions(data);
+  }
+
+  async function loadComments(processId: string): Promise<void> {
+    setCommentsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/processes/${processId}/comments`, { cache: "no-store" });
+      if (!res.ok) {
+        setComments([]);
+        return;
+      }
+      const data = (await res.json()) as ProcessComment[];
+      setComments(data);
+    } finally {
+      setCommentsLoading(false);
+    }
   }
 
   async function loadHistory(): Promise<void> {
@@ -309,7 +366,7 @@ export default function HomePage() {
     setResult(details);
     setInputText(details.description ?? details.title);
     setSelectedNodeId(null);
-    await loadRevisions(id);
+    await Promise.all([loadRevisions(id), loadComments(id)]);
   }
 
   async function onExecute(): Promise<void> {
@@ -356,12 +413,53 @@ export default function HomePage() {
       const generated = (await genRes.json()) as ProcessDetails;
       setResult(generated);
       setSelectedNodeId(null);
-      await loadHistory();
-      await loadRevisions(generated.id);
+      await Promise.all([loadHistory(), loadRevisions(generated.id), loadComments(generated.id)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
       setExecuting(false);
+    }
+  }
+
+  async function onSubmitComment(): Promise<void> {
+    if (!result) return;
+
+    const message = commentMessage.trim();
+    if (!message) {
+      setError("Comment message is required.");
+      return;
+    }
+
+    const targetId = commentTargetType === "process" ? null : commentTargetId.trim();
+    if ((commentTargetType === "node" || commentTargetType === "edge") && !targetId) {
+      setError("Target id is required for node/edge comments.");
+      return;
+    }
+
+    setCommentPosting(true);
+    setError(null);
+    try {
+      const payload = {
+        targetType: commentTargetType,
+        targetId,
+        message,
+        author: commentAuthor.trim() || undefined,
+      };
+      const res = await fetch(`${API_BASE}/api/v1/processes/${result.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(getApiErrorMessage(body, "Failed to add comment."));
+      }
+      resetCommentForm();
+      await loadComments(result.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unexpected error.");
+    } finally {
+      setCommentPosting(false);
     }
   }
 
@@ -383,8 +481,7 @@ export default function HomePage() {
 
       const updated = (await res.json()) as ProcessDetails;
       setResult(updated);
-      await loadHistory();
-      await loadRevisions(updated.id);
+      await Promise.all([loadHistory(), loadRevisions(updated.id), loadComments(updated.id)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error.");
     } finally {
@@ -411,6 +508,8 @@ export default function HomePage() {
               setCompareLeftVersion(null);
               setCompareRightVersion(null);
               setSelectedNodeId(null);
+              setComments([]);
+              resetCommentForm();
             }}
           >
             + New XPlain
@@ -519,7 +618,11 @@ export default function HomePage() {
                     fitView
                     nodesDraggable={false}
                     nodesConnectable={false}
-                    onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                    onNodeClick={(_, node) => {
+                      setSelectedNodeId(node.id);
+                      setCommentTargetType("node");
+                      setCommentTargetId(node.id);
+                    }}
                   >
                     <Background color="#262626" />
                     <Controls />
@@ -655,6 +758,84 @@ export default function HomePage() {
                   ) : (
                     <p className="sideMeta">No revision data yet.</p>
                   )}
+                </div>
+                <div className="commentCard">
+                  <h3>Review Comments</h3>
+                  <div className="commentForm">
+                    <div className="commentFormRow">
+                      <label>
+                        Target
+                        <select
+                          value={commentTargetType}
+                          onChange={(e) => {
+                            const nextType = e.target.value as CommentTargetType;
+                            setCommentTargetType(nextType);
+                            if (nextType === "process") {
+                              setCommentTargetId("");
+                            }
+                          }}
+                        >
+                          <option value="process">Process</option>
+                          <option value="node">Node</option>
+                          <option value="edge">Edge</option>
+                        </select>
+                      </label>
+                      <label>
+                        Author
+                        <input value={commentAuthor} onChange={(e) => setCommentAuthor(e.target.value)} placeholder="lead" />
+                      </label>
+                    </div>
+                    {commentTargetType !== "process" ? (
+                      <label>
+                        Target Id
+                        <select
+                          value={commentTargetId}
+                          onChange={(e) => setCommentTargetId(e.target.value)}
+                          disabled={availableCommentTargets.length === 0}
+                        >
+                          <option value="">Select target</option>
+                          {availableCommentTargets.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <label>
+                      Comment
+                      <textarea
+                        rows={3}
+                        value={commentMessage}
+                        onChange={(e) => setCommentMessage(e.target.value)}
+                        placeholder="Add review note..."
+                      />
+                    </label>
+                    <div className="commentActions">
+                      <button className="xplainBtn" onClick={() => void onSubmitComment()} disabled={commentPosting}>
+                        {commentPosting ? "Saving..." : "Add Comment"}
+                      </button>
+                    </div>
+                  </div>
+                  {commentsLoading ? <p className="sideMeta">Loading comments...</p> : null}
+                  <ul className="commentList">
+                    {comments.length > 0 ? (
+                      comments.map((item) => (
+                        <li key={item.id} className="commentItem">
+                          <p className="commentMeta">
+                            #{item.id} | {item.targetType}
+                            {item.targetId ? `:${item.targetId}` : ""} | {item.author} |{" "}
+                            {new Date(item.createdAt).toLocaleString()}
+                          </p>
+                          <p className="commentMessage">{item.message}</p>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="commentItem">
+                        <p className="commentMessage">No comments yet.</p>
+                      </li>
+                    )}
+                  </ul>
                 </div>
                 <p className="desc">{result.description ?? "No description provided"}</p>
                 <div className="columns">

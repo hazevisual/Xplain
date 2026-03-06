@@ -6,6 +6,9 @@ from typing import Protocol
 from uuid import uuid4
 
 from .schemas import (
+    CommentTargetType,
+    ProcessComment,
+    ProcessCommentCreateRequest,
     ProcessCreateRequest,
     ProcessDetails,
     ProcessGraph,
@@ -44,12 +47,20 @@ class ProcessStore(Protocol):
     def transition_status(self, process_id: str, target_status: ProcessStatus) -> ProcessDetails | None:
         ...
 
+    def list_comments(self, process_id: str) -> list[ProcessComment]:
+        ...
+
+    def add_comment(self, process_id: str, payload: ProcessCommentCreateRequest) -> ProcessComment | None:
+        ...
+
 
 class InMemoryProcessStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._data: dict[str, ProcessDetails] = {}
         self._revisions: dict[str, dict[int, ProcessDetails]] = {}
+        self._comments: dict[str, list[ProcessComment]] = {}
+        self._comment_seq = 0
 
     @staticmethod
     def _to_revision_summary(item: ProcessDetails) -> ProcessRevisionSummary:
@@ -110,6 +121,7 @@ class InMemoryProcessStore:
         with self._lock:
             self._data[process_id] = item
             self._revisions[process_id] = {item.version: item.model_copy(deep=True)}
+            self._comments[process_id] = []
 
         return item.model_copy(deep=True)
 
@@ -146,6 +158,8 @@ class InMemoryProcessStore:
             del self._data[process_id]
             if process_id in self._revisions:
                 del self._revisions[process_id]
+            if process_id in self._comments:
+                del self._comments[process_id]
             return True
 
     def list_revisions(self, process_id: str) -> list[ProcessRevisionSummary]:
@@ -171,3 +185,38 @@ class InMemoryProcessStore:
             )
             self._data[process_id] = updated
             return updated.model_copy(deep=True)
+
+    def list_comments(self, process_id: str) -> list[ProcessComment]:
+        with self._lock:
+            comments = self._comments.get(process_id, [])
+            return [item.model_copy(deep=True) for item in comments]
+
+    def add_comment(self, process_id: str, payload: ProcessCommentCreateRequest) -> ProcessComment | None:
+        with self._lock:
+            process = self._data.get(process_id)
+            if not process:
+                return None
+
+            if payload.target_type == CommentTargetType.node:
+                valid_ids = {node.id for node in process.graph.nodes}
+                if payload.target_id not in valid_ids:
+                    raise ValueError("targetId does not match any node in current graph")
+            if payload.target_type == CommentTargetType.edge:
+                valid_ids = {edge.id for edge in process.graph.edges}
+                if payload.target_id not in valid_ids:
+                    raise ValueError("targetId does not match any edge in current graph")
+
+            self._comment_seq += 1
+            item = ProcessComment(
+                id=self._comment_seq,
+                processId=process_id,
+                targetType=payload.target_type,
+                targetId=payload.target_id,
+                message=payload.message,
+                author=payload.author or "reviewer",
+                createdAt=datetime.now(UTC),
+            )
+            if process_id not in self._comments:
+                self._comments[process_id] = []
+            self._comments[process_id].insert(0, item)
+            return item.model_copy(deep=True)

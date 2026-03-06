@@ -12,6 +12,8 @@ from .postgres_store import PostgresProcessStore
 from .schemas import (
     ErrorResponse,
     GenerateGraphRequest,
+    ProcessComment,
+    ProcessCommentCreateRequest,
     ProcessCreateRequest,
     ProcessDetails,
     ProcessRevisionSummary,
@@ -144,6 +146,35 @@ def list_process_revisions(process_id: str) -> list[ProcessRevisionSummary]:
     if process is None:
         raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
     return store.list_revisions(process_id)
+
+
+@app.get("/api/v1/processes/{process_id}/comments", response_model=list[ProcessComment], responses=API_ERROR_RESPONSES)
+def list_process_comments(process_id: str) -> list[ProcessComment]:
+    process = store.get(process_id)
+    if process is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    return store.list_comments(process_id)
+
+
+@app.post("/api/v1/processes/{process_id}/comments", response_model=ProcessComment, responses=API_ERROR_RESPONSES)
+def add_process_comment(process_id: str, payload: ProcessCommentCreateRequest) -> ProcessComment:
+    process = store.get(process_id)
+    if process is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+
+    try:
+        comment = store.add_comment(process_id, payload)
+    except ValueError as exc:
+        raise_api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "invalid_comment_target",
+            str(exc),
+            details={"target_type": payload.target_type.value, "target_id": payload.target_id},
+        )
+
+    if comment is None:
+        raise_api_error(status.HTTP_404_NOT_FOUND, "process_not_found", "Process not found")
+    return comment
 
 
 @app.put("/api/v1/processes/{process_id}", response_model=ProcessDetails, responses=API_ERROR_RESPONSES)

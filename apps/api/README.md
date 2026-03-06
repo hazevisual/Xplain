@@ -55,6 +55,18 @@ All API errors return a stable envelope:
 - Transition endpoint: `POST /api/v1/processes/{id}/status`.
 - Graph generation and manual updates are allowed only in `draft`.
 
+## Review Comments
+
+- List comments: `GET /api/v1/processes/{id}/comments`
+- Add comment: `POST /api/v1/processes/{id}/comments`
+- Supported targets:
+  - `process` (no `targetId`)
+  - `node` (`targetId` must match current graph node id)
+  - `edge` (`targetId` must match current graph edge id)
+- Invalid node/edge target ids return:
+  - HTTP `400`
+  - `error.code = "invalid_comment_target"`
+
 ## Planned Scope
 
 - Process/version CRUD.

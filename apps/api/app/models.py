@@ -50,3 +50,25 @@ class ProcessRevisionRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
+
+
+class ProcessCommentRecord(Base):
+    __tablename__ = "process_comments"
+    __table_args__ = (
+        Index("ix_process_comments_process_id", "process_id"),
+        Index("ix_process_comments_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    process_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("processes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    message: Mapped[str] = mapped_column(Text(), nullable=False)
+    author: Mapped[str] = mapped_column(String(128), nullable=False, default="reviewer")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )

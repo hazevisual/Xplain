@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NodeType(str, Enum):
@@ -32,6 +32,12 @@ class ProcessStatus(str, Enum):
     draft = "draft"
     in_review = "in_review"
     approved = "approved"
+
+
+class CommentTargetType(str, Enum):
+    process = "process"
+    node = "node"
+    edge = "edge"
 
 
 class ProcessNode(BaseModel):
@@ -132,6 +138,40 @@ class ProcessStatusTransitionRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ProcessCommentCreateRequest(BaseModel):
+    target_type: CommentTargetType = Field(alias="targetType")
+    target_id: str | None = Field(default=None, alias="targetId", min_length=1, max_length=128)
+    message: str = Field(min_length=1, max_length=2000)
+    author: str | None = Field(default=None, max_length=128)
+
+    model_config = {"populate_by_name": True}
+
+    @field_validator("message")
+    @classmethod
+    def normalize_message(cls, value: str) -> str:
+        message = value.strip()
+        if not message:
+            raise ValueError("Message must not be empty")
+        return message
+
+    @field_validator("author", mode="before")
+    @classmethod
+    def normalize_author(cls, value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "ProcessCommentCreateRequest":
+        if self.target_type == CommentTargetType.process:
+            self.target_id = None
+            return self
+        if not self.target_id:
+            raise ValueError("targetId is required for node/edge comments")
+        return self
+
+
 class ErrorPayload(BaseModel):
     code: str = Field(min_length=1)
     message: str = Field(min_length=1)
@@ -158,6 +198,18 @@ class ProcessRevisionSummary(BaseModel):
     edges_count: int
     warnings_count: int
     coverage_percent: float = Field(ge=0, le=100)
+
+
+class ProcessComment(BaseModel):
+    id: int
+    process_id: str = Field(alias="processId")
+    target_type: CommentTargetType = Field(alias="targetType")
+    target_id: str | None = Field(default=None, alias="targetId")
+    message: str
+    author: str
+    created_at: datetime = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True}
 
 
 class ProcessDetails(ProcessSummary):

@@ -114,3 +114,76 @@ def test_lifecycle_transition_and_locking() -> None:
     )
     assert invalid_back_transition.status_code == 409
     assert invalid_back_transition.json()["error"]["code"] == "invalid_status_transition"
+
+
+def test_comments_for_process_node_and_edge() -> None:
+    created = client.post(
+        "/api/v1/processes",
+        json={"title": "Comment Flow", "description": "Receive input. Validate. Produce output."},
+    )
+    assert created.status_code == 201
+    process_id = created.json()["id"]
+
+    generated = client.post(f"/api/v1/processes/{process_id}/generate-graph", json={"text": None})
+    assert generated.status_code == 200
+    graph = generated.json()["graph"]
+    node_id = graph["nodes"][0]["id"]
+    edge_id = graph["edges"][0]["id"]
+
+    process_comment = client.post(
+        f"/api/v1/processes/{process_id}/comments",
+        json={"targetType": "process", "message": "Looks clear", "author": "lead"},
+    )
+    assert process_comment.status_code == 200
+    assert process_comment.json()["targetType"] == "process"
+    assert process_comment.json()["targetId"] is None
+
+    node_comment = client.post(
+        f"/api/v1/processes/{process_id}/comments",
+        json={"targetType": "node", "targetId": node_id, "message": "Need more detail"},
+    )
+    assert node_comment.status_code == 200
+    assert node_comment.json()["targetType"] == "node"
+    assert node_comment.json()["targetId"] == node_id
+
+    edge_comment = client.post(
+        f"/api/v1/processes/{process_id}/comments",
+        json={"targetType": "edge", "targetId": edge_id, "message": "Confirm dependency direction"},
+    )
+    assert edge_comment.status_code == 200
+    assert edge_comment.json()["targetType"] == "edge"
+    assert edge_comment.json()["targetId"] == edge_id
+
+    listed = client.get(f"/api/v1/processes/{process_id}/comments")
+    assert listed.status_code == 200
+    payload = listed.json()
+    assert len(payload) == 3
+    assert payload[0]["id"] == edge_comment.json()["id"]
+    assert payload[1]["id"] == node_comment.json()["id"]
+    assert payload[2]["id"] == process_comment.json()["id"]
+
+
+def test_comment_with_invalid_target_returns_bad_request() -> None:
+    created = client.post(
+        "/api/v1/processes",
+        json={"title": "Comment Validation", "description": "Start. Continue. End."},
+    )
+    assert created.status_code == 201
+    process_id = created.json()["id"]
+
+    generated = client.post(f"/api/v1/processes/{process_id}/generate-graph", json={"text": None})
+    assert generated.status_code == 200
+
+    invalid_node = client.post(
+        f"/api/v1/processes/{process_id}/comments",
+        json={"targetType": "node", "targetId": "node-missing", "message": "Bad node"},
+    )
+    assert invalid_node.status_code == 400
+    assert invalid_node.json()["error"]["code"] == "invalid_comment_target"
+
+    invalid_edge = client.post(
+        f"/api/v1/processes/{process_id}/comments",
+        json={"targetType": "edge", "targetId": "edge-missing", "message": "Bad edge"},
+    )
+    assert invalid_edge.status_code == 400
+    assert invalid_edge.json()["error"]["code"] == "invalid_comment_target"
